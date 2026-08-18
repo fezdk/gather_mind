@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Gather Mind",
+    "slug": "gather-mind",
+    "version": "0.5.0",
+    "description": "A calm, local-first companion for thoughts, gentle daily goals, and appointment plans.",
+    "orientation": "portrait",
+    "scheme": "gathermind",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#F7F3EA",
+    "primaryColor": "#416555",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F3EA"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "dk.fez.gathermind",
+      "buildNumber": "5",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "dk.fez.gathermind",
+      "versionCode": 5,
+      "allowBackup": false,
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ],
+      "blockedPermissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F3EA",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#416555",
+          "defaultChannel": "appointments"
+        }
+      ]
+    ]
+  }
+}

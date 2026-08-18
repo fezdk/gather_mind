@@ -1,0 +1,16 @@
+{
+  "name": "gather-mind",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "A calm, local-first thought and appointment companion.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.19.4 <25"
+  },
+  "scripts": {
+    "start": "python3 -m http.server 4173",
+    "mobile": "npm --prefix mobile start",
+    "test": "node --test"
+  }
+}

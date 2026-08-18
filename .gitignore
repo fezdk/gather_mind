@@ -1,0 +1,32 @@
+# Dependencies and development state
+node_modules/
+mobile/node_modules/
+.expo/
+mobile/.expo/
+dist/
+mobile/dist/
+
+# Generated native projects
+mobile/android/
+mobile/ios/
+
+# Build products and local caches
+*.aab
+*.apk
+*.ipa
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+service-account*.json

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f3ea" />
+    <meta name="description" content="Gather Mind keeps thoughts, appointments, and talking points together." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>Gather Mind</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="brand" type="button" data-go="home" aria-label="Gather Mind home">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+          <span>Gather Mind</span>
+        </button>
+        <button class="icon-button" id="settings-button" type="button" aria-label="Open settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Zm7.2-2.17c.04-.35.05-.71.02-1.08.03-.37.02-.73-.02-1.08l2.01-1.57-2-3.46-2.5 1a8.4 8.4 0 0 0-1.86-1.08L14.5 3.15h-4l-.35 2.66A8.4 8.4 0 0 0 8.29 6.9l-2.5-1-2 3.46 2.01 1.57c-.04.35-.05.71-.02 1.08-.03.37-.02.73.02 1.08l-2.01 1.57 2 3.46 2.5-1c.57.45 1.19.81 1.86 1.08l.35 2.66h4l.35-2.66a8.4 8.4 0 0 0 1.86-1.08l2.5 1 2-3.46-2.01-1.57Z"/></svg>
+        </button>
+      </header>
+
+      <main id="main" tabindex="-1">
+        <section class="view is-active" id="home-view" data-view="home" aria-labelledby="home-heading">
+          <div class="welcome-row">
+            <div>
+              <p class="eyebrow" id="today-label"></p>
+              <h1 id="home-heading">One thing at a time.</h1>
+            </div>
+            <span class="weather-dot" aria-hidden="true"></span>
+          </div>
+
+          <button class="capture-card" id="quick-capture" type="button">
+            <span class="capture-plus" aria-hidden="true">+</span>
+            <span>
+              <strong>What’s on your mind?</strong>
+              <small>Catch it now. Sort it later.</small>
+            </span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+
+          <section class="section-block" aria-labelledby="next-heading">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Coming up</p>
+                <h2 id="next-heading">Your next appointment</h2>
+              </div>
+              <button class="text-button" type="button" data-go="appointments">See all</button>
+            </div>
+            <div id="next-appointment"></div>
+          </section>
+
+          <section class="section-block" aria-labelledby="threads-heading">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Still open</p>
+                <h2 id="threads-heading">Loose threads</h2>
+              </div>
+              <button class="text-button" type="button" data-go="cloud">View cloud</button>
+            </div>
+            <div class="thread-list" id="loose-threads"></div>
+          </section>
+        </section>
+
+        <section class="view" id="cloud-view" data-view="cloud" aria-labelledby="cloud-heading">
+          <div class="page-heading">
+            <p class="eyebrow">See the connections</p>
+            <h1 id="cloud-heading">Mind cloud</h1>
+            <p>Search a phrase, or tap a thought to see what gathers around it.</p>
+          </div>
+
+          <label class="search-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+            <span class="sr-only">Search thoughts</span>
+            <input id="cloud-search" type="search" placeholder="Try “doctor”, “sleep”, or “work”" autocomplete="off" />
+            <button id="clear-search" type="button" aria-label="Clear search">×</button>
+          </label>
+
+          <div class="filter-chips" id="filter-chips" aria-label="Filter thoughts"></div>
+
+          <div class="cloud-card">
+            <div class="cloud-toolbar">
+              <span id="cloud-count" aria-live="polite"></span>
+              <button class="small-button" id="add-thought-cloud" type="button">+ Add thought</button>
+            </div>
+            <div id="mind-cloud" class="mind-cloud" aria-label="Visual map of related thoughts"></div>
+            <p class="cloud-hint">Tap a bubble to focus · connections show shared themes</p>
+          </div>
+
+          <section class="section-block compact" aria-labelledby="related-heading">
+            <h2 id="related-heading">Related list</h2>
+            <div id="related-list" class="related-list"></div>
+          </section>
+        </section>
+
+        <section class="view" id="appointments-view" data-view="appointments" aria-labelledby="appointments-heading">
+          <div class="page-heading with-action">
+            <div>
+              <p class="eyebrow">Be ready</p>
+              <h1 id="appointments-heading">Appointments</h1>
+              <p>Keep the time and everything you want to say together.</p>
+            </div>
+            <button class="round-add" id="add-appointment" type="button" aria-label="Add appointment">+</button>
+          </div>
+
+          <div class="appointment-filters" role="group" aria-label="Appointment filter">
+            <button class="is-selected" type="button" data-appointment-filter="upcoming">Upcoming</button>
+            <button type="button" data-appointment-filter="past">Past</button>
+          </div>
+          <div id="appointments-list" class="appointments-list"></div>
+        </section>
+
+        <section class="view" id="appointment-detail-view" data-view="appointment-detail" aria-labelledby="detail-title">
+          <button class="back-button" type="button" data-go="appointments">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            Appointments
+          </button>
+          <div id="appointment-detail"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button class="is-active" type="button" data-go="home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3Z"/></svg>
+          <span>Today</span>
+        </button>
+        <button type="button" data-go="cloud">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><circle cx="6" cy="16" r="3"/><circle cx="18" cy="16" r="3"/><path d="m10 9-2.5 4M14 9l2.5 4M9 16h6"/></svg>
+          <span>Cloud</span>
+        </button>
+        <button type="button" data-go="appointments">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/></svg>
+          <span>Appointments</span>
+        </button>
+      </nav>
+    </div>
+
+    <dialog id="thought-dialog" class="sheet-dialog">
+      <form id="thought-form" method="dialog">
+        <div class="dialog-handle" aria-hidden="true"></div>
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Quick capture</p>
+            <h2 id="thought-dialog-title">What’s on your mind?</h2>
+          </div>
+          <button class="close-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <input type="hidden" name="id" />
+        <label>
+          Thought
+          <textarea name="text" rows="4" maxlength="500" placeholder="It can be messy. Just get it out." required></textarea>
+        </label>
+        <label>
+          Themes <span>(optional, separated by commas)</span>
+          <input name="tags" type="text" placeholder="health, sleep, work" />
+        </label>
+        <label>
+          Link to an appointment <span>(optional)</span>
+          <select name="appointmentId" id="thought-appointment-select">
+            <option value="">Not linked</option>
+          </select>
+        </label>
+        <div class="form-actions">
+          <button class="secondary-button danger-button" id="delete-thought" type="button">Delete</button>
+          <button class="primary-button" value="save">Keep this thought</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="appointment-dialog" class="sheet-dialog">
+      <form id="appointment-form" method="dialog">
+        <div class="dialog-handle" aria-hidden="true"></div>
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">New appointment</p>
+            <h2>When do you need to be there?</h2>
+          </div>
+          <button class="close-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <label>
+          Appointment name
+          <input name="title" type="text" maxlength="100" placeholder="Doctor, dentist, school meeting…" required />
+        </label>
+        <div class="field-row">
+          <label>
+            Date
+            <input name="date" type="date" required />
+          </label>
+          <label>
+            Time
+            <input name="time" type="time" required />
+          </label>
+        </div>
+        <label>
+          Place or person <span>(optional)</span>
+          <input name="location" type="text" maxlength="120" placeholder="Clinic, address, or video call" />
+        </label>
+        <label>
+          Remind me
+          <select name="reminderMinutes">
+            <option value="1440">1 day before</option>
+            <option value="120">2 hours before</option>
+            <option value="60">1 hour before</option>
+            <option value="30">30 minutes before</option>
+            <option value="0">No reminder</option>
+          </select>
+        </label>
+        <button class="primary-button full-width" value="save">Create appointment</button>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="sheet-dialog">
+      <form method="dialog">
+        <div class="dialog-handle" aria-hidden="true"></div>
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Your space</p>
+            <h2>Settings</h2>
+          </div>
+          <button class="close-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <div class="setting-row">
+          <div>
+            <strong>Gentle reminders</strong>
+            <p>Show appointment reminders when this app is open.</p>
+          </div>
+          <button class="secondary-button" id="notification-button" type="button">Enable</button>
+        </div>
+        <div class="privacy-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <div><strong>Private by default</strong><p>Your information stays in this browser on this device. Nothing is uploaded.</p></div>
+        </div>
+        <button class="secondary-button full-width" id="install-button" type="button" hidden>Install on this device</button>
+        <button class="secondary-button danger-outline full-width" id="delete-data-button" type="button">Delete all local data</button>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

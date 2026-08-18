@@ -1,0 +1,35 @@
+{
+  "name": "gather-mind-mobile",
+  "version": "0.5.0",
+  "main": "index.ts",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.19.4 <25"
+  },
+  "dependencies": {
+    "@react-native-community/datetimepicker": "8.4.4",
+    "expo": "54.0.37",
+    "expo-notifications": "~0.32.17",
+    "expo-sqlite": "~16.0.10",
+    "expo-status-bar": "3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  },
+  "scripts": {
+    "start": "expo start",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.cjs",
+    "release:check": "npm run check && npm test && expo export --platform android --output-dir /tmp/gather-mind-release-check",
+    "build:preview:android": "npx eas-cli@latest build --platform android --profile preview",
+    "build:production:android": "npx eas-cli@latest build --platform android --profile production",
+    "submit:android": "npx eas-cli@latest submit --platform android --profile production --latest",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
