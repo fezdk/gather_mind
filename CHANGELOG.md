@@ -2,6 +2,12 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.5.2 — 2026-08-18
+
+- Kept the app header below Android’s clock, notification, and battery status area with an explicit inset fallback.
+- Removed the temporary five-second notification test from settings and support guidance.
+- Kept reminder verification focused on real appointment reminders.
+
 ## 0.5.1 — 2026-08-18
 
 - Kept focused editor fields visible when the Android keyboard opens.

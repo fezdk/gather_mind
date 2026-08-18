@@ -1,12 +1,12 @@
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Linking, Modal, PanResponder,
-  Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Platform, Pressable, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AgendaItem, Appointment, AppState, DailyTask, REMINDER_OPTIONS, Thought, dateKeyAfter,
   createEmptyState, describeCountdown, groupUpcomingAppointments, localDateKey, makeId, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts,
@@ -15,7 +15,7 @@ import {
 import { clearState as clearStoredState, loadState, saveState } from './src/storage';
 import {
   cancelReminder, configureNotifications, notificationsEnabled, reconcileReminders,
-  requestNotificationPermission, scheduleReminder, scheduleTestReminder,
+  requestNotificationPermission, scheduleReminder,
 } from './src/notifications';
 
 type Tab = 'today' | 'cloud' | 'appointments';
@@ -31,11 +31,12 @@ const shortDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'num
 const fullDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export default function App() {
-  return <SafeAreaProvider><GatherMindApp /></SafeAreaProvider>;
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><GatherMindApp /></SafeAreaProvider>;
 }
 
 function GatherMindApp() {
   const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? Math.max(insets.top, NativeStatusBar.currentHeight ?? 0) : insets.top;
   const [state, setState] = useState<AppState | null>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -107,15 +108,6 @@ function GatherMindApp() {
     }
     flash('Appointment reminders are on');
     return true;
-  }
-
-  async function testReminder() {
-    let allowed = notificationsOn;
-    if (!allowed) allowed = await enableReminders();
-    if (!allowed) return;
-    await scheduleTestReminder();
-    setReminderModal(false);
-    Alert.alert('Test scheduled', 'Put the app in the background. A test reminder will appear in 5 seconds.');
   }
 
   async function upsertAppointment(input: Omit<Appointment, 'notificationId' | 'createdAt' | 'agenda'> & { existing?: Appointment }) {
@@ -317,14 +309,14 @@ function GatherMindApp() {
     );
   }
 
-  if (!state) return <SafeAreaView style={s.loading} edges={['top', 'right', 'bottom', 'left']}><ActivityIndicator color={C.sageDark} /><Text style={s.loadingText}>Gathering your thoughts…</Text></SafeAreaView>;
+  if (!state) return <SafeAreaView style={[s.loading, { paddingTop: topInset }]} edges={['right', 'bottom', 'left']}><ActivityIndicator color={C.sageDark} /><Text style={s.loadingText}>Gathering your thoughts…</Text></SafeAreaView>;
   const selected = state.appointments.find((item) => item.id === selectedId);
   const editingThought = state.thoughts.find((item) => item.id === editingThoughtId);
   const editingTask = state.tasks.find((item) => item.id === editingTaskId);
   const pendingTask = state.tasks.find((item) => item.id === pendingPostponeId);
 
-  return <SafeAreaView style={s.app} edges={['top', 'right', 'left']}>
-    <StatusBar style="dark" />
+  return <SafeAreaView style={[s.app, { paddingTop: topInset }]} edges={['right', 'left']}>
+    <ExpoStatusBar style="dark" backgroundColor={C.paper} translucent />
     <View style={s.topbar}>
       <Pressable style={s.brand} onPress={() => { setSelectedId(null); setTab('today'); }}>
         <View style={s.brandMark}><View style={s.dotOne} /><View style={s.dotTwo} /><View style={s.dotThree} /></View>
@@ -359,7 +351,7 @@ function GatherMindApp() {
     <ThoughtModal visible={thoughtModal} thought={editingThought} appointments={upcomingAppointments(state.appointments)} onClose={() => { setThoughtModal(false); setEditingThoughtId(null); }} onSave={saveThought} onDelete={deleteThought} preselectedId={selectedId ?? ''} />
     <TaskModal visible={taskModal} task={editingTask} onClose={() => { setTaskModal(false); setEditingTaskId(null); }} onSave={saveTask} onDelete={deleteTask} />
     <AppointmentModal visible={appointmentModal} appointment={selected} onClose={() => setAppointmentModal(false)} onSave={upsertAppointment} />
-    <SettingsModal visible={reminderModal} enabled={notificationsOn} onClose={() => setReminderModal(false)} onEnable={enableReminders} onTest={testReminder} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
+    <SettingsModal visible={reminderModal} enabled={notificationsOn} onClose={() => setReminderModal(false)} onEnable={enableReminders} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!message && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText}>{message}</Text></View>}
@@ -568,23 +560,22 @@ function AppointmentModal({ visible, appointment, onClose, onSave }: { visible: 
   </Sheet>;
 }
 
-function SettingsModal({ visible, enabled, onClose, onEnable, onTest, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; onClose: () => void; onEnable: () => void; onTest: () => void; onPrivacy: () => void; onDeleteAll: () => void }) {
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.1" title="Settings & privacy">
+function SettingsModal({ visible, enabled, onClose, onEnable, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; onClose: () => void; onEnable: () => void; onPrivacy: () => void; onDeleteAll: () => void }) {
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.2" title="Settings & privacy">
     <Field>Appointment reminders</Field>
     <View style={s.reminderStatus}><View style={[s.statusDot, enabled && s.statusDotOn]} /><View style={s.flex}><Text style={s.cardTitle}>{enabled ? 'Reminders are enabled' : 'Reminders are off'}</Text><Text style={s.small}>Scheduled locally by your phone. No account, internet connection, or backend is needed.</Text></View></View>
     {!enabled && <Primary label="Enable reminders" onPress={onEnable} />}
-    <Pressable style={[s.secondary, s.wideSecondary, s.testButton]} onPress={onTest}><Text style={s.secondaryText}>Send a test in 5 seconds</Text></Pressable>
     <Text style={s.privacy}>Your phone may delay notifications in Focus, Do Not Disturb, or extreme battery-saving modes.</Text>
     <Field>Privacy & support</Field>
     <View style={s.privacySummary}><Text style={s.cardTitle}>Private by default</Text><Text style={s.small}>Your content stays on this phone. Gather Mind has no account, ads, analytics, backend, or remote sync.</Text></View>
-    <Pressable style={[s.secondary, s.wideSecondary, s.testButton]} onPress={onPrivacy}><Text style={s.secondaryText}>Read privacy & support</Text></Pressable>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onPrivacy}><Text style={s.secondaryText}>Read privacy & support</Text></Pressable>
     <Pressable style={[s.dangerButton, s.modalDanger]} onPress={onDeleteAll}><Text style={s.dangerText}>Delete all local data</Text></Pressable>
   </Sheet>;
 }
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 18 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.1 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.2 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
     <Field>What the app stores</Field>
     <Text style={s.policyText}>The content you enter is stored in the app’s private local storage. Appointment reminders are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field>Permissions</Field>
@@ -592,8 +583,8 @@ function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onC
     <Field>Retention and deletion</Field>
     <Text style={s.policyText}>Data remains until you delete individual items, use the control below, clear the app’s storage, or uninstall the app. Delete all also cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field>Support</Field>
-    <Text style={s.policyText}>For a reminder problem, first send the five-second test above. Check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings.</Text>
-    <Pressable style={[s.secondary, s.wideSecondary, s.testButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues?subject=Gather%20Mind%20support')}><Text style={s.secondaryText}>Email https://github.com/fezdk/gather_mind/issues</Text></Pressable>
+    <Text style={s.policyText}>For a reminder problem, check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings. Open and save the appointment again after changing permissions.</Text>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues?subject=Gather%20Mind%20support')}><Text style={s.secondaryText}>Email https://github.com/fezdk/gather_mind/issues</Text></Pressable>
     <Text style={s.disclaimer}>Gather Mind is an organisational aid, not a medical device, diagnostic tool, treatment, or substitute for professional care. The source code is Apache-2.0 licensed; that software licence does not grant anyone rights to your personal content.</Text>
     <Pressable style={[s.dangerButton, s.modalDanger]} onPress={onDeleteAll}><Text style={s.dangerText}>Delete all local data</Text></Pressable>
   </Sheet>;
@@ -636,5 +627,5 @@ const s = StyleSheet.create({
   secondary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 14 }, secondaryText: { color: C.sageDark, fontWeight: '700', fontSize: 13 }, dangerButton: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#9E51484D', backgroundColor: C.card }, dangerText: { color: C.danger, fontWeight: '700' }, modalDanger: { flex: 0, marginTop: 10 }, modalCopy: { color: C.muted, fontSize: 13, lineHeight: 19 }, confirmPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginBottom: 14 }, confirmDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: '#00000012' }, confirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 }, confirmPrimary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageDark, paddingHorizontal: 14 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#25322F73' }, sheet: { maxHeight: '90%', paddingTop: 8, paddingHorizontal: 22, paddingBottom: Platform.OS === 'ios' ? 24 : 18, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: C.paper }, handle: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, backgroundColor: '#D4D2CA', marginBottom: 15 }, sheetTitle: { color: C.ink, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 25, fontWeight: '600' }, close: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, closeText: { color: C.muted, fontSize: 25 }, sheetBody: { paddingTop: 20, paddingBottom: 10 }, field: { color: C.ink, fontSize: 12, fontWeight: '700', marginBottom: 7, marginTop: 14 }, input: { minHeight: 50, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, color: C.ink, paddingHorizontal: 14, fontSize: 15 }, textarea: { minHeight: 105, paddingTop: 13, textAlignVertical: 'top' },
   chips: { flexDirection: 'row', gap: 8, paddingBottom: 4 }, chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, chipSelected: { backgroundColor: C.sageDark, borderColor: C.sageDark }, chipText: { color: C.muted, fontSize: 12, fontWeight: '600' }, chipTextSelected: { color: C.white }, primary: { minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageDark, marginTop: 22 }, primaryText: { color: C.white, fontSize: 14, fontWeight: '800' }, disabled: { opacity: .45 }, taskTypeChoices: { gap: 8 }, taskType: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskTypeSelected: { borderColor: C.sageDark, backgroundColor: C.sagePale }, taskTypeTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 2 }, dailyNote: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 13, backgroundColor: C.yellow, marginTop: 10 }, dailyNoteIcon: { color: C.sageDark, fontSize: 12 }, dateRow: { flexDirection: 'row', gap: 10, marginTop: 14 }, dateButton: { flex: 1, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 13 }, dateLabel: { color: C.sageDark, fontSize: 9, fontWeight: '800', letterSpacing: 1 }, dateValue: { color: C.ink, fontSize: 15, fontWeight: '700', marginTop: 4 }, pickerWrap: { marginTop: 8, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card }, pickerDone: { color: C.sageDark, fontWeight: '800', textAlign: 'right', padding: 12 },
-  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, testButton: { marginTop: 12 }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, padding: 13, borderRadius: 13, backgroundColor: C.ink }, toastText: { color: C.white, textAlign: 'center', fontSize: 13, fontWeight: '600' },
+  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, spacedButton: { marginTop: 12 }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, padding: 13, borderRadius: 13, backgroundColor: C.ink }, toastText: { color: C.white, textAlign: 'center', fontSize: 13, fontWeight: '600' },
 });

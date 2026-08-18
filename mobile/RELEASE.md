@@ -1,4 +1,4 @@
-# Android release runbook — Gather Mind 0.5.1
+# Android release runbook — Gather Mind 0.5.2
 
 The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first Google Play upload; changing it later creates a different app.
 
@@ -20,7 +20,7 @@ npm test
 npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
-Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, the five-second test, create/edit/delete for every item type, reminder delivery while the app is closed, restart persistence, daily rollover, move-to-tomorrow confirmation, and **Delete all local data**.
+Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, daily rollover, move-to-tomorrow confirmation, and **Delete all local data**.
 
 ## Build and distribute
 
@@ -36,7 +36,7 @@ Create the production Android App Bundle (`.aab`):
 npm run build:production:android
 ```
 
-The production profile auto-increments the remote Android version code while the user-visible version remains `0.5.1`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
+The production profile auto-increments the remote Android version code while the user-visible version remains `0.5.2`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
 
 ```bash
 npm run submit:android
@@ -46,4 +46,4 @@ Promote from internal testing only after the console declarations, privacy/suppo
 
 ## iOS preparation
 
-The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.5.1.
+The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.5.2.

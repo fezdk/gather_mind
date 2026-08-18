@@ -72,21 +72,6 @@ export async function scheduleReminder(appointment: Appointment) {
   });
 }
 
-export async function scheduleTestReminder() {
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Gather Mind reminder test',
-      body: 'It works — appointments can remind you even when the app is closed.',
-      sound: 'default',
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 5,
-      ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
-    },
-  });
-}
-
 export async function reconcileReminders(appointments: Appointment[]) {
   if (!(await notificationsEnabled())) return appointments;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();

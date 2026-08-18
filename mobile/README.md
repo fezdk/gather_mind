@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.5.1
+# Gather Mind mobile 0.5.2
 
 This is the native Android/iOS version of Gather Mind. It stores its data and schedules appointment reminders entirely on the phone. No runtime backend, account, push token, or internet connection is required.
 
@@ -26,12 +26,12 @@ npm start
 
 Install **Expo Go** on the phone, keep the phone and computer on the same network, and scan the QR code printed by Expo.
 
-In Gather Mind:
+To verify reminders with a real appointment:
 
-1. Tap the gear button in the top-right.
-2. Tap **Enable reminders** and allow notifications.
-3. Tap **Send a test in 5 seconds**.
-4. Put the app in the background. The phone should display the test reminder.
+1. Open **Appointments** and tap **Schedule an appointment**.
+2. Choose a time about 31 minutes ahead and select **30 min** under **Remind me**.
+3. Save, allow notifications when asked, and put the app in the background.
+4. The appointment reminder should arrive in about one minute.
 
 Local notifications are supported in Expo Go. A distributable build uses the project-specific Android exact-alarm permission and notification icon configured in `app.json`.
 
