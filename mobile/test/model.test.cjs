@@ -21,6 +21,7 @@ const {
   suggestedTags,
   tasksForToday,
   tasksForTomorrow,
+  unlinkedThoughts,
 } = require('../src/model.ts');
 
 const today = '2026-08-18';
@@ -120,6 +121,14 @@ test('tag suggestions reuse stored themes, ranked by frequency', () => {
 
   assert.deepEqual(suggestedTags(thoughts), ['health', 'sleep', 'work']);
   assert.deepEqual(suggestedTags(thoughts, ['health'], 'wo'), ['work']);
+});
+
+test('loose thoughts exclude appointment links and return when unlinked', () => {
+  const loose = thought('loose', 'Loose thought');
+  const linked = { ...thought('linked', 'Appointment thought'), appointmentId: 'appointment' };
+
+  assert.deepEqual(unlinkedThoughts([loose, linked]).map((item) => item.id), ['loose']);
+  assert.deepEqual(unlinkedThoughts([loose, { ...linked, appointmentId: '' }]).map((item) => item.id), ['loose', 'linked']);
 });
 
 

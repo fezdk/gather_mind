@@ -1,6 +1,6 @@
 {
   "name": "gather-mind",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "description": "A calm, local-first thought and appointment companion.",

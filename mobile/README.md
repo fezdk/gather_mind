@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.5.3
+# Gather Mind mobile 0.5.4
 
 This is the native Android/iOS version of Gather Mind. It stores its data and schedules appointment reminders entirely on the phone. No runtime backend, account, push token, or internet connection is required.
 

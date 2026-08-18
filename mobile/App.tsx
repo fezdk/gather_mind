@@ -3,14 +3,14 @@ import * as Notifications from 'expo-notifications';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Linking, Modal, PanResponder,
+  ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Linking, Modal, PanResponder,
   Platform, Pressable, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AgendaItem, Appointment, AppState, DailyTask, REMINDER_OPTIONS, Thought, dateKeyAfter,
   createEmptyState, describeCountdown, groupUpcomingAppointments, localDateKey, makeId, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts, suggestedTags,
-  tasksForToday, tasksForTomorrow, upcomingAppointments,
+  tasksForToday, tasksForTomorrow, unlinkedThoughts, upcomingAppointments,
 } from './src/model';
 import { clearState as clearStoredState, loadState, saveState } from './src/storage';
 import {
@@ -84,6 +84,22 @@ function GatherMindApp() {
     });
     return () => { mounted = false; subscription.remove(); };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (privacyModal) { setPrivacyModal(false); return true; }
+      if (reminderModal) { setReminderModal(false); return true; }
+      if (appointmentModal) { setAppointmentModal(false); return true; }
+      if (thoughtModal) { setThoughtModal(false); setEditingThoughtId(null); return true; }
+      if (taskModal) { setTaskModal(false); setEditingTaskId(null); return true; }
+      if (pendingPostponeId) { setPendingPostponeId(null); return true; }
+      if (selectedId) { setSelectedId(null); return true; }
+      if (tab !== 'today') { setTab('today'); return true; }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [appointmentModal, pendingPostponeId, privacyModal, reminderModal, selectedId, tab, taskModal, thoughtModal]);
 
   function commit(next: AppState) {
     setState(next);
@@ -338,7 +354,7 @@ function GatherMindApp() {
         { text: 'Delete', style: 'destructive', onPress: () => deleteAppointment(selected) },
       ])}
     /> : <>
-      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onEditThought={openThought} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={() => setAppointmentModal(true)} onOpen={(id) => { setSelectedId(id); setTab('appointments'); }} />}
+      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onEditThought={openThought} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={() => setAppointmentModal(true)} onOpen={setSelectedId} />}
       {tab === 'cloud' && <CloudView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
       {tab === 'appointments' && <AppointmentsView appointments={state.appointments} onAdd={() => setAppointmentModal(true)} onOpen={setSelectedId} />}
       <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
@@ -364,6 +380,7 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onEditThought,
   const today = localDateKey();
   const todayTasks = tasksForToday(state.tasks, today);
   const tomorrowTasks = tasksForTomorrow(state.tasks, today);
+  const looseThoughts = unlinkedThoughts(state.thoughts).slice(0, 4);
   const completed = todayTasks.filter((task) => task.completedOn === today).length;
   return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
     <Text style={s.eyebrow}>{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</Text>
@@ -378,7 +395,7 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onEditThought,
     <View style={s.sectionAction}><View style={s.flex}><Text style={s.eyebrow}>Coming up</Text><Text style={s.sectionTitle}>Your next appointment</Text></View><Pressable style={s.scheduleSmall} onPress={onAddAppointment} accessibilityRole="button"><Text style={s.scheduleSmallText}>+ Schedule</Text></Pressable></View>
     {next ? <AppointmentCard appointment={next} linkedCount={state.thoughts.filter((thought) => thought.appointmentId === next.id).length} onPress={() => onOpen(next.id)} /> : <Empty title="Nothing scheduled" body="Add an appointment when you’re ready." />}
     <Section eyebrow="Still open" title="Loose threads" />
-    {state.thoughts.slice(0, 4).map((thought, index) => <ThoughtRow key={thought.id} thought={thought} color={bubbles[index % bubbles.length]} onPress={() => onEditThought(thought)} />)}
+    {looseThoughts.length ? looseThoughts.map((thought, index) => <ThoughtRow key={thought.id} thought={thought} color={bubbles[index % bubbles.length]} onPress={() => onEditThought(thought)} />) : <Empty title="Everything is connected" body="Thoughts linked to appointments stay available in the Mind cloud and inside their appointment." />}
   </ScrollView>;
 }
 
@@ -570,7 +587,7 @@ function AppointmentModal({ visible, appointment, onClose, onSave }: { visible: 
 }
 
 function SettingsModal({ visible, enabled, onClose, onEnable, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; onClose: () => void; onEnable: () => void; onPrivacy: () => void; onDeleteAll: () => void }) {
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.3" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.4" title="Settings & privacy">
     <Field>Appointment reminders</Field>
     <View style={s.reminderStatus}><View style={[s.statusDot, enabled && s.statusDotOn]} /><View style={s.flex}><Text style={s.cardTitle}>{enabled ? 'Reminders are enabled' : 'Reminders are off'}</Text><Text style={s.small}>Scheduled locally by your phone. No account, internet connection, or backend is needed.</Text></View></View>
     {!enabled && <Primary label="Enable reminders" onPress={onEnable} />}
@@ -584,7 +601,7 @@ function SettingsModal({ visible, enabled, onClose, onEnable, onPrivacy, onDelet
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 18 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.3 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.4 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
     <Field>What the app stores</Field>
     <Text style={s.policyText}>The content you enter is stored in the app’s private local storage. Appointment reminders are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field>Permissions</Field>

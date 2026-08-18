@@ -92,6 +92,10 @@ export function searchThoughts(thoughts: Thought[], query: string) {
     .map(({ thought }) => thought);
 }
 
+export function unlinkedThoughts(thoughts: Thought[]) {
+  return thoughts.filter((thought) => !thought.appointmentId);
+}
+
 export function suggestedTags(thoughts: Thought[], excluded: string[] = [], query = '', limit = 8) {
   const excludedTags = new Set(excluded.map(normalizeTag));
   const wanted = normalizeTag(query);

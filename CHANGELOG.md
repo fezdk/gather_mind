@@ -2,6 +2,13 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.5.4 — 2026-08-19
+
+- Kept appointment-linked thoughts out of the Today screen's Loose threads list and restored them immediately when unlinked.
+- Added a clear empty state when every thought is connected.
+- Made Android's hardware back button close the active sheet, leave appointment detail, or return to Today before exiting the app.
+- Preserved the originating tab when opening appointment detail from Today or Appointments.
+
 ## 0.5.3 — 2026-08-18
 
 - Fixed thought searches so short and common words filter results instead of showing the entire cloud.
