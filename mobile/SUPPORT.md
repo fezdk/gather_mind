@@ -1,6 +1,6 @@
 # Gather Mind support
 
-Gather Mind 0.5.2 is an Android-first beta. It works offline and does not require an account or backend.
+Gather Mind 0.5.3 is an Android-first beta. It works offline and does not require an account or backend.
 
 ## Reminder troubleshooting
 

@@ -17,6 +17,8 @@ const {
   groupUpcomingAppointments,
   localDateKey,
   removeLegacySeedData,
+  searchThoughts,
+  suggestedTags,
   tasksForToday,
   tasksForTomorrow,
 } = require('../src/model.ts');
@@ -82,6 +84,42 @@ test('more frequently moved goals sort above other unfinished goals', () => {
   const calm = { ...baseTask, id: 'calm' };
   const moved = { ...baseTask, id: 'moved', offsetCount: 3 };
   assert.deepEqual(tasksForToday([calm, moved], today).map((task) => task.id), ['moved', 'calm']);
+});
+
+const thought = (id, text, tags = [], createdAt = '2026-08-18T08:00:00.000Z') => ({
+  id, text, tags, appointmentId: '', createdAt,
+});
+
+test('thought search filters for short and common-word queries instead of returning everything', () => {
+  const thoughts = [
+    thought('meeting', 'Ask me about the project', ['work']),
+    thought('sleep', 'Track sleep quality', ['health']),
+  ];
+
+  assert.deepEqual(searchThoughts(thoughts, 'me').map((item) => item.id), ['meeting']);
+  assert.deepEqual(searchThoughts(thoughts, 'the').map((item) => item.id), ['meeting']);
+  assert.deepEqual(searchThoughts(thoughts, 'missing'), []);
+});
+
+test('thought search matches themes and ignores accents and case', () => {
+  const thoughts = [
+    thought('doctor', 'Book an appointment', ['Søvn']),
+    thought('coffee', 'Buy café beans', ['errands']),
+  ];
+
+  assert.deepEqual(searchThoughts(thoughts, 'SØVN').map((item) => item.id), ['doctor']);
+  assert.deepEqual(searchThoughts(thoughts, 'cafe').map((item) => item.id), ['coffee']);
+});
+
+test('tag suggestions reuse stored themes, ranked by frequency', () => {
+  const thoughts = [
+    thought('one', 'One', ['health', 'sleep']),
+    thought('two', 'Two', ['health', 'work']),
+    thought('three', 'Three', ['Health']),
+  ];
+
+  assert.deepEqual(suggestedTags(thoughts), ['health', 'sleep', 'work']);
+  assert.deepEqual(suggestedTags(thoughts, ['health'], 'wo'), ['work']);
 });
 
 

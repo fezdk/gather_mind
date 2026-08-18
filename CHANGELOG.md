@@ -2,6 +2,14 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.5.3 — 2026-08-18
+
+- Fixed thought searches so short and common words filter results instead of showing the entire cloud.
+- Added accent- and case-insensitive matching across thought text and saved themes.
+- Added locally stored theme suggestions while capturing or editing thoughts.
+- Added tappable saved-theme filters to the Mind cloud.
+- Documented the reproducible development, Android build, verification, signing, and GitHub release workflow in `AGENTS.md`.
+
 ## 0.5.2 — 2026-08-18
 
 - Kept the app header below Android’s clock, notification, and battery status area with an explicit inset fallback.

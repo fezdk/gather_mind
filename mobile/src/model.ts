@@ -72,22 +72,52 @@ export function makeId(prefix: string) {
 }
 
 export function tokenize(value = '') {
-  return [...new Set(value.toLocaleLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !STOP_WORDS.has(word)))];
+  return [...new Set(searchTokens(value).filter((word) => word.length > 2 && !STOP_WORDS.has(word)))];
 }
 
 export function searchThoughts(thoughts: Thought[], query: string) {
-  const wanted = tokenize(query);
-  if (!wanted.length) return [...thoughts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const normalizedQuery = normalizeSearchText(query).trim();
+  if (!normalizedQuery) return [...thoughts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const wanted = searchTokens(normalizedQuery);
   return thoughts
     .map((thought) => {
-      const words = tokenize(`${thought.text} ${thought.tags.join(' ')}`);
-      const searchable = `${thought.text} ${thought.tags.join(' ')}`.toLocaleLowerCase();
-      const score = (searchable.includes(query.toLocaleLowerCase()) ? 4 : 0) + wanted.reduce((total, word) => total + (words.some((candidate) => candidate.includes(word)) ? 2 : 0), 0);
+      const searchable = normalizeSearchText(`${thought.text} ${thought.tags.join(' ')}`);
+      const words = searchTokens(searchable);
+      const score = (searchable.includes(normalizedQuery) ? 4 : 0)
+        + wanted.reduce((total, word) => total + (words.some((candidate) => candidate.includes(word)) ? 2 : 0), 0);
       return { thought, score };
     })
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
     .map(({ thought }) => thought);
+}
+
+export function suggestedTags(thoughts: Thought[], excluded: string[] = [], query = '', limit = 8) {
+  const excludedTags = new Set(excluded.map(normalizeTag));
+  const wanted = normalizeTag(query);
+  const counts = new Map<string, number>();
+  thoughts.forEach((thought) => thought.tags.forEach((tag) => {
+    const normalized = normalizeTag(tag);
+    if (normalized && !excludedTags.has(normalized) && (!wanted || normalized.includes(wanted))) {
+      counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    }
+  }));
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLocaleLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function searchTokens(value: string) {
+  return normalizeSearchText(value).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+function normalizeTag(value: string) {
+  return value.trim().toLocaleLowerCase();
 }
 
 export function upcomingAppointments(appointments: Appointment[], now = new Date()) {
