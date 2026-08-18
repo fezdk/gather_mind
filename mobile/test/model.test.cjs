@@ -14,6 +14,7 @@ require.extensions['.ts'] = (module, filename) => {
 const {
   createEmptyState,
   dateKeyAfter,
+  groupUpcomingAppointments,
   localDateKey,
   removeLegacySeedData,
   tasksForToday,
@@ -81,4 +82,24 @@ test('more frequently moved goals sort above other unfinished goals', () => {
   const calm = { ...baseTask, id: 'calm' };
   const moved = { ...baseTask, id: 'moved', offsetCount: 3 };
   assert.deepEqual(tasksForToday([calm, moved], today).map((task) => task.id), ['moved', 'calm']);
+});
+
+
+test('appointments are sorted and grouped into a calendar-like daily agenda', () => {
+  const now = new Date(2026, 7, 18, 9, 0);
+  const appointment = (id, date) => ({ id, startsAt: date.toISOString() });
+  const groups = groupUpcomingAppointments([
+    appointment('later', new Date(2026, 7, 20, 15, 0)),
+    appointment('past', new Date(2026, 7, 17, 15, 0)),
+    appointment('first', new Date(2026, 7, 19, 9, 0)),
+    appointment('same-day', new Date(2026, 7, 19, 14, 0)),
+  ], now);
+
+  assert.deepEqual(groups.map((group) => ({
+    dateKey: group.dateKey,
+    ids: group.appointments.map((item) => item.id),
+  })), [
+    { dateKey: '2026-08-19', ids: ['first', 'same-day'] },
+    { dateKey: '2026-08-20', ids: ['later'] },
+  ]);
 });

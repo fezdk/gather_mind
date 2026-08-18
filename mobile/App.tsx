@@ -3,12 +3,13 @@ import * as Notifications from 'expo-notifications';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, KeyboardAvoidingView, Linking, Modal, PanResponder,
-  Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Linking, Modal, PanResponder,
+  Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AgendaItem, Appointment, AppState, DailyTask, REMINDER_OPTIONS, Thought, dateKeyAfter,
-  createEmptyState, describeCountdown, localDateKey, makeId, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts,
+  createEmptyState, describeCountdown, groupUpcomingAppointments, localDateKey, makeId, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts,
   tasksForToday, tasksForTomorrow, upcomingAppointments,
 } from './src/model';
 import { clearState as clearStoredState, loadState, saveState } from './src/storage';
@@ -30,6 +31,11 @@ const shortDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'num
 const fullDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export default function App() {
+  return <SafeAreaProvider><GatherMindApp /></SafeAreaProvider>;
+}
+
+function GatherMindApp() {
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState<AppState | null>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -311,13 +317,13 @@ export default function App() {
     );
   }
 
-  if (!state) return <SafeAreaView style={s.loading}><ActivityIndicator color={C.sageDark} /><Text style={s.loadingText}>Gathering your thoughts…</Text></SafeAreaView>;
+  if (!state) return <SafeAreaView style={s.loading} edges={['top', 'right', 'bottom', 'left']}><ActivityIndicator color={C.sageDark} /><Text style={s.loadingText}>Gathering your thoughts…</Text></SafeAreaView>;
   const selected = state.appointments.find((item) => item.id === selectedId);
   const editingThought = state.thoughts.find((item) => item.id === editingThoughtId);
   const editingTask = state.tasks.find((item) => item.id === editingTaskId);
   const pendingTask = state.tasks.find((item) => item.id === pendingPostponeId);
 
-  return <SafeAreaView style={s.app}>
+  return <SafeAreaView style={s.app} edges={['top', 'right', 'left']}>
     <StatusBar style="dark" />
     <View style={s.topbar}>
       <Pressable style={s.brand} onPress={() => { setSelectedId(null); setTab('today'); }}>
@@ -340,10 +346,10 @@ export default function App() {
         { text: 'Delete', style: 'destructive', onPress: () => deleteAppointment(selected) },
       ])}
     /> : <>
-      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onEditThought={openThought} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onOpen={(id) => { setSelectedId(id); setTab('appointments'); }} />}
+      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onEditThought={openThought} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={() => setAppointmentModal(true)} onOpen={(id) => { setSelectedId(id); setTab('appointments'); }} />}
       {tab === 'cloud' && <CloudView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
       {tab === 'appointments' && <AppointmentsView appointments={state.appointments} onAdd={() => setAppointmentModal(true)} onOpen={setSelectedId} />}
-      <View style={s.nav}>
+      <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
         <NavButton label="Today" symbol="⌂" active={tab === 'today'} onPress={() => setTab('today')} />
         <NavButton label="Cloud" symbol="⌘" active={tab === 'cloud'} onPress={() => setTab('cloud')} />
         <NavButton label="Appointments" symbol="□" active={tab === 'appointments'} onPress={() => setTab('appointments')} />
@@ -356,17 +362,18 @@ export default function App() {
     <SettingsModal visible={reminderModal} enabled={notificationsOn} onClose={() => setReminderModal(false)} onEnable={enableReminders} onTest={testReminder} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
-    {!!message && <View style={s.toast}><Text style={s.toastText}>{message}</Text></View>}
+    {!!message && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText}>{message}</Text></View>}
   </SafeAreaView>;
 }
 
-function TodayView({ state, notificationsOn, onEnable, onCapture, onEditThought, onAddTask, onEditTask, onToggleTask, onPostponeTask, onRestoreTask, onOpen }: { state: AppState; notificationsOn: boolean; onEnable: () => void; onCapture: () => void; onEditThought: (thought: Thought) => void; onAddTask: () => void; onEditTask: (task: DailyTask) => void; onToggleTask: (task: DailyTask) => void; onPostponeTask: (task: DailyTask) => void; onRestoreTask: (task: DailyTask) => void; onOpen: (id: string) => void }) {
+function TodayView({ state, notificationsOn, onEnable, onCapture, onEditThought, onAddTask, onEditTask, onToggleTask, onPostponeTask, onRestoreTask, onAddAppointment, onOpen }: { state: AppState; notificationsOn: boolean; onEnable: () => void; onCapture: () => void; onEditThought: (thought: Thought) => void; onAddTask: () => void; onEditTask: (task: DailyTask) => void; onToggleTask: (task: DailyTask) => void; onPostponeTask: (task: DailyTask) => void; onRestoreTask: (task: DailyTask) => void; onAddAppointment: () => void; onOpen: (id: string) => void }) {
+  const { bottom } = useSafeAreaInsets();
   const next = upcomingAppointments(state.appointments)[0];
   const today = localDateKey();
   const todayTasks = tasksForToday(state.tasks, today);
   const tomorrowTasks = tasksForTomorrow(state.tasks, today);
   const completed = todayTasks.filter((task) => task.completedOn === today).length;
-  return <ScrollView style={s.content} contentContainerStyle={s.body}>
+  return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
     <Text style={s.eyebrow}>{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</Text>
     <Text style={s.title}>One thing at a time.</Text>
     <Pressable style={s.capture} onPress={onCapture}><View style={s.plus}><Text style={s.plusText}>+</Text></View><View style={s.flex}><Text style={s.captureTitle}>What’s on your mind?</Text><Text style={s.captureSub}>Catch it now. Sort it later.</Text></View><Text style={s.arrow}>›</Text></Pressable>
@@ -376,7 +383,7 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onEditThought,
     <Text style={s.swipeHint}>Tap to edit · swipe right to complete · left for tomorrow</Text>
     <View style={s.taskList}>{todayTasks.length ? todayTasks.map((task) => <SwipeTaskRow key={task.id} task={task} today={today} onEdit={() => onEditTask(task)} onToggle={() => onToggleTask(task)} onPostpone={() => onPostponeTask(task)} />) : <Empty title="A clear day" body="Add one small goal when you’re ready." />}</View>
     {!!tomorrowTasks.length && <View style={s.tomorrowBox}><Text style={s.tomorrowTitle}>Waiting for tomorrow</Text>{tomorrowTasks.map((task) => <View style={s.tomorrowRow} key={`tomorrow-${task.id}`}><View style={[s.stressDot, { backgroundColor: taskColor(task.offsetCount) }]} /><Pressable style={s.tomorrowEdit} onPress={() => onEditTask(task)}><Text style={s.tomorrowText}>{task.title}</Text>{task.offsetCount > 0 && <Text style={s.movedText}>Moved {task.offsetCount}×</Text>}</Pressable><Pressable style={s.restoreButton} onPress={() => onRestoreTask(task)} accessibilityLabel={`Bring ${task.title} back to today`}><Text style={s.restoreText}>↶ Today</Text></Pressable></View>)}</View>}
-    <Section eyebrow="Coming up" title="Your next appointment" />
+    <View style={s.sectionAction}><View style={s.flex}><Text style={s.eyebrow}>Coming up</Text><Text style={s.sectionTitle}>Your next appointment</Text></View><Pressable style={s.scheduleSmall} onPress={onAddAppointment} accessibilityRole="button"><Text style={s.scheduleSmallText}>+ Schedule</Text></Pressable></View>
     {next ? <AppointmentCard appointment={next} linkedCount={state.thoughts.filter((thought) => thought.appointmentId === next.id).length} onPress={() => onOpen(next.id)} /> : <Empty title="Nothing scheduled" body="Add an appointment when you’re ready." />}
     <Section eyebrow="Still open" title="Loose threads" />
     {state.thoughts.slice(0, 4).map((thought, index) => <ThoughtRow key={thought.id} thought={thought} color={bubbles[index % bubbles.length]} onPress={() => onEditThought(thought)} />)}
@@ -427,9 +434,10 @@ function SwipeTaskRow({ task, today, onEdit, onToggle, onPostpone }: { task: Dai
 }
 
 function CloudView({ thoughts, onCapture, onEdit }: { thoughts: Thought[]; onCapture: () => void; onEdit: (thought: Thought) => void }) {
+  const { bottom } = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const matches = useMemo(() => searchThoughts(thoughts, query).slice(0, 12), [thoughts, query]);
-  return <ScrollView style={s.content} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+  return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]} keyboardShouldPersistTaps="handled">
     <Text style={s.eyebrow}>See the connections</Text><Text style={s.title}>Mind cloud</Text><Text style={s.subtitle}>Search a phrase to gather related thoughts.</Text>
     <TextInput style={s.search} value={query} onChangeText={setQuery} placeholder="Try “meeting”, “sleep”, or “work”" placeholderTextColor={C.muted} accessibilityLabel="Search thoughts" />
     <View style={s.cloudCard}><View style={s.between}><Text style={s.small}>{matches.length} thoughts</Text><Pressable onPress={onCapture}><Text style={s.link}>+ Add thought</Text></Pressable></View><View style={s.cloud}>{matches.length ? matches.map((thought, index) => <Pressable key={thought.id} onPress={() => onEdit(thought)} accessibilityLabel={`Edit thought: ${thought.text}`} style={[s.bubble, index === 0 && s.bubbleLarge, { backgroundColor: bubbles[index % bubbles.length] }]}><Text style={s.bubbleText} numberOfLines={3}>{thought.text}</Text></Pressable>) : <Empty title="Nothing gathered here" body="Try another phrase." />}</View></View>
@@ -439,15 +447,25 @@ function CloudView({ thoughts, onCapture, onEdit }: { thoughts: Thought[]; onCap
 }
 
 function AppointmentsView({ appointments, onAdd, onOpen }: { appointments: Appointment[]; onAdd: () => void; onOpen: (id: string) => void }) {
-  const upcoming = upcomingAppointments(appointments);
-  return <ScrollView style={s.content} contentContainerStyle={s.body}>
-    <View style={s.between}><View style={s.flex}><Text style={s.eyebrow}>Be ready</Text><Text style={s.title}>Appointments</Text></View><Pressable style={s.roundAdd} onPress={onAdd}><Text style={s.roundAddText}>+</Text></Pressable></View>
-    <Text style={s.subtitle}>Keep the time, place, questions, documents, decisions, and follow-ups together.</Text>
-    <View style={s.list}>{upcoming.length ? upcoming.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} linkedCount={0} onPress={() => onOpen(appointment.id)} />) : <Empty title="Nothing scheduled" body="Add one so it does not have to live in your head." />}</View>
+  const { bottom } = useSafeAreaInsets();
+  const groups = groupUpcomingAppointments(appointments);
+  return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
+    <Text style={s.eyebrow}>Be ready</Text><Text style={s.title}>Appointments</Text>
+    <Text style={s.subtitle}>A dated agenda for the time, place, questions, documents, decisions, and follow-ups you want together.</Text>
+    <Pressable style={s.scheduleAction} onPress={onAdd} accessibilityRole="button" accessibilityLabel="Schedule a new appointment"><Text style={s.scheduleActionText}>+ Schedule an appointment</Text></Pressable>
+    <View style={s.calendarList}>{groups.length ? groups.map((group) => <View key={group.dateKey} style={s.calendarDay}><View style={s.calendarDayHeader}><View style={s.calendarDayDot} /><Text style={s.calendarDayLabel}>{calendarDayLabel(group.appointments[0].startsAt)}</Text></View><View style={s.calendarDayCards}>{group.appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} linkedCount={0} onPress={() => onOpen(appointment.id)} />)}</View></View>) : <Empty title="Nothing scheduled" body="Use “Schedule an appointment” to choose a date, time, place, and reminder." />}</View>
   </ScrollView>;
 }
 
+function calendarDayLabel(startsAt: string) {
+  const date = new Date(startsAt);
+  const relative = describeCountdown(startsAt);
+  const formatted = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }).format(date);
+  return relative === 'Today' || relative === 'Tomorrow' ? relative + ' · ' + formatted : formatted;
+}
+
 function AppointmentDetail({ appointment, thoughts, onBack, onChange, onAddThought, onEditThought, onEdit, onDelete }: { appointment: Appointment; thoughts: Thought[]; onBack: () => void; onChange: (appointment: Appointment) => void; onAddThought: () => void; onEditThought: (thought: Thought) => void; onEdit: () => void; onDelete: () => void }) {
+  const { bottom } = useSafeAreaInsets();
   const [planModal, setPlanModal] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const editingPlanItem = appointment.agenda.find((item) => item.id === editingPlanId);
@@ -469,7 +487,7 @@ function AppointmentDetail({ appointment, thoughts, onBack, onChange, onAddThoug
       } },
     ]);
   }
-  return <><ScrollView style={s.content} contentContainerStyle={s.detailBody} keyboardShouldPersistTaps="handled">
+  return <><ScrollView style={s.content} contentContainerStyle={[s.detailBody, { paddingBottom: 42 + bottom }]} keyboardShouldPersistTaps="handled">
     <Pressable onPress={onBack}><Text style={s.back}>‹ Appointments</Text></Pressable>
     <View style={s.hero}><Text style={s.heroEyebrow}>{describeCountdown(appointment.startsAt)}</Text><Text style={s.heroTitle}>{appointment.title}</Text><Text style={s.heroFact}>{fullDate.format(new Date(appointment.startsAt))}</Text>{!!appointment.location && <Text style={s.heroFact}>⌖  {appointment.location}</Text>}<View style={s.reminderPill}><Text style={s.reminderPillText}>{appointment.notificationId ? `Reminder set · ${reminderLabel(appointment.reminderMinutes)} before` : 'Reminder off'}</Text></View></View>
     <Section eyebrow="Prepare your way" title="Appointment plan" />
@@ -538,10 +556,11 @@ function AppointmentModal({ visible, appointment, onClose, onSave }: { visible: 
   const [title, setTitle] = useState(''); const [location, setLocation] = useState(''); const [date, setDate] = useState(defaultDate); const [minutes, setMinutes] = useState(120); const [picker, setPicker] = useState<PickerMode>(null);
   useEffect(() => { if (visible) { setTitle(appointment?.title ?? ''); setLocation(appointment?.location ?? ''); setDate(appointment ? new Date(appointment.startsAt) : defaultDate); setMinutes(appointment?.reminderMinutes ?? 120); setPicker(null); } }, [visible, appointment, defaultDate]);
   function changeDate(_event: DateTimePickerEvent, value?: Date) { if (Platform.OS === 'android') setPicker(null); if (value) setDate(value); }
+  function openPicker(mode: Exclude<PickerMode, null>) { Keyboard.dismiss(); setPicker(mode); }
   function submit() { if (title.trim()) onSave({ id: appointment?.id ?? makeId('appointment'), title: title.trim(), startsAt: date.toISOString(), location: location.trim(), reminderMinutes: minutes, existing: appointment }); }
   return <Sheet visible={visible} onClose={onClose} eyebrow={appointment ? 'Edit appointment' : 'New appointment'} title="When do you need to be there?">
     <Field>Appointment name</Field><TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="Doctor, teacher, contractor, meeting…" placeholderTextColor={C.muted} autoFocus />
-    <View style={s.dateRow}><Pressable style={s.dateButton} onPress={() => setPicker('date')}><Text style={s.dateLabel}>DATE</Text><Text style={s.dateValue}>{shortDate.format(date)}</Text></Pressable><Pressable style={s.dateButton} onPress={() => setPicker('time')}><Text style={s.dateLabel}>TIME</Text><Text style={s.dateValue}>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)}</Text></Pressable></View>
+    <Field>Date and time</Field><View style={s.dateRow}><Pressable style={s.dateButton} onPress={() => openPicker('date')} accessibilityRole="button" accessibilityLabel="Choose appointment date"><Text style={s.dateLabel}>DATE</Text><Text style={s.dateValue}>{shortDate.format(date)}</Text></Pressable><Pressable style={s.dateButton} onPress={() => openPicker('time')} accessibilityRole="button" accessibilityLabel="Choose appointment time"><Text style={s.dateLabel}>TIME</Text><Text style={s.dateValue}>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)}</Text></Pressable></View>
     {!!picker && <View style={s.pickerWrap}><DateTimePicker value={date} mode={picker} display={Platform.OS === 'ios' ? 'spinner' : 'default'} minimumDate={picker === 'date' ? new Date() : undefined} onChange={changeDate} />{Platform.OS === 'ios' && <Pressable onPress={() => setPicker(null)}><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
     <Field>Place or person (optional)</Field><TextInput style={s.input} value={location} onChangeText={setLocation} placeholder="Office, address, person, or video call" placeholderTextColor={C.muted} />
     <Field>Remind me</Field><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{REMINDER_OPTIONS.map((option) => <Chip key={option.value} label={option.label} selected={minutes === option.value} onPress={() => setMinutes(option.value)} />)}</ScrollView>
@@ -550,7 +569,7 @@ function AppointmentModal({ visible, appointment, onClose, onSave }: { visible: 
 }
 
 function SettingsModal({ visible, enabled, onClose, onEnable, onTest, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; onClose: () => void; onEnable: () => void; onTest: () => void; onPrivacy: () => void; onDeleteAll: () => void }) {
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.0" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.1" title="Settings & privacy">
     <Field>Appointment reminders</Field>
     <View style={s.reminderStatus}><View style={[s.statusDot, enabled && s.statusDotOn]} /><View style={s.flex}><Text style={s.cardTitle}>{enabled ? 'Reminders are enabled' : 'Reminders are off'}</Text><Text style={s.small}>Scheduled locally by your phone. No account, internet connection, or backend is needed.</Text></View></View>
     {!enabled && <Primary label="Enable reminders" onPress={onEnable} />}
@@ -565,7 +584,7 @@ function SettingsModal({ visible, enabled, onClose, onEnable, onTest, onPrivacy,
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 18 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.0 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays on your device</Text><Text style={s.small}>Gather Mind 0.5.1 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
     <Field>What the app stores</Field>
     <Text style={s.policyText}>The content you enter is stored in the app’s private local storage. Appointment reminders are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field>Permissions</Field>
@@ -581,7 +600,8 @@ function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onC
 }
 
 function Sheet({ visible, onClose, eyebrow, title, children }: { visible: boolean; onClose: () => void; eyebrow: string; title: string; children: ReactNode }) {
-  return <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}><KeyboardAvoidingView style={s.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={s.sheet}><View style={s.handle} /><View style={s.between}><View style={s.flex}><Text style={s.eyebrow}>{eyebrow}</Text><Text style={s.sheetTitle}>{title}</Text></View><Pressable style={s.close} onPress={onClose} accessibilityLabel="Close"><Text style={s.closeText}>×</Text></Pressable></View><ScrollView contentContainerStyle={s.sheetBody} keyboardShouldPersistTaps="handled">{children}</ScrollView></View></KeyboardAvoidingView></Modal>;
+  const { bottom } = useSafeAreaInsets();
+  return <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}><KeyboardAvoidingView style={s.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={[s.sheet, { paddingBottom: 18 + bottom }]}><View style={s.handle} /><View style={s.between}><View style={s.flex}><Text style={s.eyebrow}>{eyebrow}</Text><Text style={s.sheetTitle}>{title}</Text></View><Pressable style={s.close} onPress={onClose} accessibilityLabel="Close"><Text style={s.closeText}>×</Text></Pressable></View><ScrollView contentContainerStyle={s.sheetBody} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets>{children}</ScrollView></View></KeyboardAvoidingView></Modal>;
 }
 
 function AppointmentCard({ appointment, linkedCount, onPress }: { appointment: Appointment; linkedCount: number; onPress: () => void }) {
@@ -603,14 +623,14 @@ const s = StyleSheet.create({
   brandMark: { width: 30, height: 28 }, dotOne: { position: 'absolute', width: 18, height: 18, borderRadius: 10, borderWidth: 2, borderColor: C.sageDark, top: 0 }, dotTwo: { position: 'absolute', width: 17, height: 17, borderRadius: 10, borderWidth: 2, borderColor: C.sageDark, right: 0, top: 4 }, dotThree: { position: 'absolute', width: 18, height: 17, borderRadius: 10, borderWidth: 2, borderColor: C.sageDark, left: 7, bottom: 0, backgroundColor: C.paper }, settings: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, settingsIcon: { color: C.sageDark, fontSize: 20 },
   content: { flex: 1 }, body: { padding: 22, paddingBottom: 112 }, detailBody: { padding: 20, paddingBottom: 42 }, eyebrow: { color: C.sageDark, fontSize: 11, fontWeight: '700', letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 6 }, title: { color: C.ink, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 38, lineHeight: 43, fontWeight: '600', letterSpacing: -1.2 }, subtitle: { color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 4, marginBottom: 18 }, between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 },
   capture: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 18, borderRadius: 23, backgroundColor: C.sageDark, marginTop: 22, marginBottom: 8 }, plus: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.sagePale, alignItems: 'center', justifyContent: 'center' }, plusText: { color: C.sageDark, fontSize: 28 }, captureTitle: { color: C.white, fontWeight: '700', fontSize: 17 }, captureSub: { color: '#FFFFFFB8', marginTop: 3, fontSize: 13 }, arrow: { color: C.white, fontSize: 30 },
-  nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: C.yellow, borderRadius: 17, marginTop: 10 }, smallPrimary: { backgroundColor: C.sageDark, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 11 }, smallPrimaryText: { color: C.white, fontWeight: '700', fontSize: 12 }, section: { marginTop: 30, marginBottom: 12 }, sectionTitle: { color: C.ink, fontSize: 19, fontWeight: '700' },
+  nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: C.yellow, borderRadius: 17, marginTop: 10 }, smallPrimary: { backgroundColor: C.sageDark, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 11 }, smallPrimaryText: { color: C.white, fontWeight: '700', fontSize: 12 }, section: { marginTop: 30, marginBottom: 12 }, sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 12 }, sectionTitle: { color: C.ink, fontSize: 19, fontWeight: '700' }, scheduleSmall: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: C.sagePale }, scheduleSmallText: { color: C.sageDark, fontSize: 12, fontWeight: '800' },
   taskHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 10 }, taskAdd: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: C.sageDark }, taskAddText: { color: C.white, fontSize: 25, marginTop: -2 }, progressTrack: { height: 6, overflow: 'hidden', borderRadius: 3, backgroundColor: C.line }, progressFill: { height: 6, borderRadius: 3, backgroundColor: C.sage }, swipeHint: { color: C.muted, fontSize: 10, textAlign: 'center', marginVertical: 9 }, taskList: { gap: 8 },
   swipeShell: { overflow: 'hidden', borderRadius: 16, backgroundColor: C.sageDark }, swipeUnder: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }, completeReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, tomorrowReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, lockedReveal: { color: C.sagePale }, taskRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 11, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: C.line }, taskCheck: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5, borderColor: C.sageDark, backgroundColor: '#FFFFFF88' }, taskCheckDone: { borderColor: C.sageDark, backgroundColor: C.sageDark }, taskCheckText: { color: C.white, fontWeight: '900' }, taskText: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19 }, taskDone: { color: C.muted, textDecorationLine: 'line-through' }, taskMeta: { flexDirection: 'row', gap: 7, marginTop: 4 }, dailyBadge: { color: C.sageDark, fontSize: 10, fontWeight: '800' }, movedText: { color: '#8E4F43', fontSize: 10, fontWeight: '800' }, tomorrowButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#FFFFFF80' }, tomorrowButtonText: { color: C.sageDark, fontSize: 19, fontWeight: '800' }, lockIcon: { color: C.sageDark, fontSize: 11 },
   tomorrowBox: { marginTop: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line }, tomorrowTitle: { color: C.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 9 }, tomorrowRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }, tomorrowEdit: { flex: 1, paddingVertical: 4 }, stressDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: '#00000010' }, tomorrowText: { color: C.ink, fontSize: 13, fontWeight: '600' }, restoreButton: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: C.sagePale }, restoreText: { color: C.sageDark, fontSize: 10, fontWeight: '800' },
   appointmentCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, dateBlock: { width: 64, height: 68, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sagePale }, dateMonth: { color: C.sageDark, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' }, dateDay: { color: C.sageDark, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 29, fontWeight: '600' }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: '700', marginBottom: 3 }, small: { color: C.muted, fontSize: 12, lineHeight: 17 }, reminderLine: { color: C.sageDark, fontSize: 11, fontWeight: '600', marginTop: 7 }, chevron: { color: C.muted, fontSize: 28 },
   empty: { padding: 22, alignItems: 'center', gap: 3, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line, backgroundColor: C.card }, thread: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 9 }, threadDot: { width: 10, height: 10, borderRadius: 5 }, threadText: { color: C.ink, fontSize: 14, fontWeight: '600', lineHeight: 19 }, threadChevron: { color: C.muted, fontSize: 23 }, tags: { color: C.muted, fontSize: 11, marginTop: 3 },
   search: { height: 50, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 15, color: C.ink, fontSize: 15 }, cloudCard: { padding: 14, backgroundColor: C.card, borderRadius: 22, borderWidth: 1, borderColor: C.line, marginTop: 15 }, link: { color: C.sageDark, fontSize: 12, fontWeight: '700', padding: 8 }, cloud: { minHeight: 300, paddingVertical: 18, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 10 }, bubble: { width: 92, height: 92, borderRadius: 46, padding: 10, alignItems: 'center', justifyContent: 'center' }, bubbleLarge: { width: 116, height: 116, borderRadius: 58 }, bubbleText: { color: C.ink, fontSize: 11, lineHeight: 14, fontWeight: '700', textAlign: 'center' },
-  roundAdd: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageDark }, roundAddText: { color: C.white, fontSize: 29 }, list: { gap: 12, marginTop: 24 }, nav: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.card, paddingBottom: Platform.OS === 'ios' ? 12 : 4 }, navButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 }, navSymbol: { color: C.muted, fontSize: 23 }, navLabel: { color: C.muted, fontSize: 10, fontWeight: '600' }, navActive: { color: C.sageDark, fontWeight: '800' },
+  scheduleAction: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: C.sageDark, paddingHorizontal: 18 }, scheduleActionText: { color: C.white, fontSize: 14, fontWeight: '800' }, calendarList: { gap: 22, marginTop: 26 }, calendarDay: { gap: 10 }, calendarDayHeader: { flexDirection: 'row', alignItems: 'center', gap: 9 }, calendarDayDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.sage }, calendarDayLabel: { color: C.sageDark, fontSize: 12, fontWeight: '800' }, calendarDayCards: { gap: 10, paddingLeft: 13, borderLeftWidth: 1, borderLeftColor: C.line }, nav: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.card, paddingBottom: Platform.OS === 'ios' ? 12 : 4 }, navButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 }, navSymbol: { color: C.muted, fontSize: 23 }, navLabel: { color: C.muted, fontSize: 10, fontWeight: '600' }, navActive: { color: C.sageDark, fontWeight: '800' },
   back: { color: C.sageDark, fontWeight: '700', marginBottom: 16, fontSize: 14 }, hero: { backgroundColor: C.sageDark, borderRadius: 23, padding: 22 }, heroEyebrow: { color: C.sagePale, textTransform: 'uppercase', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }, heroTitle: { color: C.white, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 31, fontWeight: '600', marginTop: 6, marginBottom: 15 }, heroFact: { color: '#FFFFFFD1', fontSize: 14, marginBottom: 7 }, reminderPill: { alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 20, backgroundColor: C.sagePale }, reminderPillText: { color: C.sageDark, fontSize: 11, fontWeight: '700' },
   planIntro: { color: C.muted, fontSize: 13, lineHeight: 19, marginTop: -4, marginBottom: 13 }, agenda: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 8 }, agendaContent: { flex: 1, paddingVertical: 2 }, checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: C.sage, alignItems: 'center', justifyContent: 'center' }, checkboxDone: { backgroundColor: C.sageDark, borderColor: C.sageDark }, check: { color: C.white, fontWeight: '800' }, agendaText: { color: C.ink, fontSize: 14, lineHeight: 20 }, editHint: { color: C.muted, fontSize: 10, marginTop: 3 }, done: { color: C.muted, textDecorationLine: 'line-through' }, planAddButton: { flex: 0, marginTop: 5 }, linked: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, backgroundColor: C.peach, marginBottom: 8 }, detailActions: { flexDirection: 'row', gap: 9, marginTop: 28 },
   secondary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 14 }, secondaryText: { color: C.sageDark, fontWeight: '700', fontSize: 13 }, dangerButton: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#9E51484D', backgroundColor: C.card }, dangerText: { color: C.danger, fontWeight: '700' }, modalDanger: { flex: 0, marginTop: 10 }, modalCopy: { color: C.muted, fontSize: 13, lineHeight: 19 }, confirmPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginBottom: 14 }, confirmDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: '#00000012' }, confirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 }, confirmPrimary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageDark, paddingHorizontal: 14 },

@@ -94,6 +94,21 @@ export function upcomingAppointments(appointments: Appointment[], now = new Date
   return appointments.filter((appointment) => Date.parse(appointment.startsAt) >= now.getTime()).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
 
+export type AppointmentGroup = {
+  dateKey: string;
+  appointments: Appointment[];
+};
+
+export function groupUpcomingAppointments(appointments: Appointment[], now = new Date()): AppointmentGroup[] {
+  return upcomingAppointments(appointments, now).reduce<AppointmentGroup[]>((groups, appointment) => {
+    const dateKey = localDateKey(new Date(appointment.startsAt));
+    const current = groups[groups.length - 1];
+    if (current?.dateKey === dateKey) current.appointments.push(appointment);
+    else groups.push({ dateKey, appointments: [appointment] });
+    return groups;
+  }, []);
+}
+
 export function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }

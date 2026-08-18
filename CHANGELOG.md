@@ -2,6 +2,13 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.5.1 — 2026-08-18
+
+- Kept focused editor fields visible when the Android keyboard opens.
+- Added safe-area spacing for Android system navigation, bottom tabs, sheets, scrolling content, and status messages.
+- Made appointment creation visible from Today and the Appointments screen.
+- Added a chronological appointment agenda grouped by date.
+
 ## 0.5.0 — 2026-08-18
 
 - Added a local-first native phone app with thought capture and a searchable mind cloud.

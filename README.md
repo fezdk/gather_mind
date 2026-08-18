@@ -1,6 +1,6 @@
 # Gather Mind
 
-Current native release: **0.5.0** · Android application ID: `dk.fez.gathermind`
+Current native release: **0.5.1** · Android application ID: `dk.fez.gathermind`
 
 Gather Mind is a calm, local-first companion for catching thoughts, seeing related ideas, and preparing for appointments. It is designed around the needs described by people dealing with cognitive overload, including AuDHD and menopause-related brain fog, without making medical claims or attempting diagnosis.
 

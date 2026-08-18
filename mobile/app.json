@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gather Mind",
     "slug": "gather-mind",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "description": "A calm, local-first companion for thoughts, gentle daily goals, and appointment plans.",
     "orientation": "portrait",
     "scheme": "gathermind",
@@ -17,15 +17,16 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "dk.fez.gathermind",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "dk.fez.gathermind",
-      "versionCode": 5,
+      "versionCode": 6,
       "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
       ],
