@@ -1,60 +1,98 @@
 # Gather Mind
 
-Current native release: **0.5.8** · Android application ID: `dk.fez.gathermind`
+Current Android beta: **0.5.8** · Application ID: `dk.fez.gathermind` · [Download the latest release](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8)
 
-Gather Mind is a calm, local-first companion for catching thoughts, seeing related ideas, and preparing for appointments. It is designed around the needs described by people dealing with cognitive overload, including AuDHD and menopause-related brain fog, without making medical claims or attempting diagnosis.
+Gather Mind is a calm, local-first Android app for catching thoughts, planning appointments, and choosing manageable goals when cognitive load is high. It is informed by needs associated with AuDHD and menopause-related brain fog without making medical claims or attempting diagnosis.
 
-The project now has two clients:
+Everything entered in the native app stays on the phone. There is no account, backend, advertising, analytics, cloud sync, or Android Internet permission.
 
-- `mobile/` is the MVP phone app. It schedules real Android/iOS local notifications that work when the app is closed.
-- The root files are the original installable web prototype and remain useful for rapid browser testing.
+## Platform and project status
 
-## What the first version does
+- `mobile/` is the current app, built with Expo 54, React Native 0.81, and TypeScript. Android phone/portrait is the supported beta target.
+- The permanent Android package and future iOS bundle identifier are both `dk.fez.gathermind`.
+- iOS configuration is prepared by the cross-platform framework, but no iPhone build is currently shipped or tested. Tablet work is also out of scope.
+- The repository root contains the original static web prototype. It remains useful for quick browser experiments but is not the release app and does not share native app data.
 
-- Captures a thought in one short flow; locally suggested themes and nearby appointment links remain optional.
-- Searches thoughts in a dedicated list and offers an optional connection view with explainable local matches.
-- Keeps Today focused on capture, goals, and the next appointment while the complete thought archive stays under Thoughts.
-- Stores dated appointments, locations, and reminder preferences.
-- Keeps a flexible appointment plan for questions, decisions, documents, things to bring, errands, and follow-ups.
-- Provides a daily goal list with completion, Undo, calm carry-over labels, optional timed quiet status, one-off and limited recurring deferrals, non-deferrable daily essentials, and daily, weekly, or monthly repetition from a chosen first date.
-- Provides create/edit/delete dialogs for goals, thoughts, and appointment-plan items.
-- Links free-form thoughts to an appointment so all relevant notes are easy to scan in one place.
-- Turns a saved thought into a one-off goal for today without removing the thought, with a link back from the goal.
-- Encrypts the native app database locally and offers an optional biometric app lock with an immediate, 1, 5, or 15 minute timeout in Settings.
-- Offers light, dark, or device-following appearance without an account or network request.
-- Works offline and keeps information on the current device. The original web prototype continues to use browser-local storage.
+## What 0.5.8 includes
 
-## Run it
+### Thoughts and connections
 
-No package install is needed. From this folder:
+- Capture a thought immediately; themes and appointment links remain optional and secondary.
+- Search the complete Thoughts archive and filter it with saved themes.
+- Receive optional, on-device suggestions for nearby appointments and previously used themes without automatic assignment.
+- Explore explainable relationships based on shared themes, meaningful words, or appointment links. Matching is local keyword/theme matching, not semantic AI search.
+- Link a thought to an appointment or turn it into today's one-off goal while preserving the original thought and a link back to it.
+
+### Goals and Today
+
+- Create one-off, daily, weekly, or monthly goals with an optional first occurrence date.
+- Keep daily essentials on Today without deferral; weekly and monthly occurrences can be moved at most 2 or 5 times respectively.
+- Keep unfinished goals visible with calm labels such as `Planned yesterday`, while explicitly deferred goals retain their `Moved ×` history.
+- Complete, reopen, defer, or restore goals with stable swipe behavior and a temporary Undo action.
+- See future recurring goals under a quieter **Scheduled ahead** section.
+- Optionally show a silent notification-list count of unfinished goals at a configurable time. It is off by default and never includes goal titles.
+
+### Appointments
+
+- Store an appointment's date, time, place or person, and local reminder choice.
+- Keep questions, decisions, documents, errands, things to bring, and follow-ups in a flexible appointment plan.
+- Schedule reminders through the phone's operating system and open the relevant appointment when a reminder is tapped.
+- Reconcile missing future reminders locally when the app starts.
+
+### Privacy, security, and comfort
+
+- Store content in a SQLCipher-encrypted SQLite database with a random 256-bit key held separately in Expo SecureStore.
+- Migrate older beta data copy-first and verify the encrypted copy before removing the legacy plaintext value.
+- Optionally lock the app with strong device biometrics after an immediate, 1, 5, or 15 minute timeout. The lock remains separate from the database key so biometric enrollment changes do not destroy the only key copy.
+- Preserve unfinished editor drafts across a short app switch or an app-lock timeout.
+- Follow the phone's appearance or use a fixed Light or Dark mode.
+- Disable Android cloud backup and provide an in-app control that deletes all local content and cancels scheduled notifications.
+
+## Install the Android beta
+
+Download `Gather-Mind-0.5.8.apk` from the [v0.5.8 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
+
+The beta certificate is not the future Google Play production credential. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for the local APK and EAS/Play release paths.
+
+## Develop the native app
+
+Use Node.js `>=20.19.4 <25`. SQLCipher is not supported in Expo Go, so encryption and app-lock testing require a native development, preview, or release build.
+
+```bash
+cd mobile
+npm ci
+npm start
+```
+
+Run the meaningful automated checks from `mobile/`:
+
+```bash
+npm run check
+npm test
+npx expo export --platform android --output-dir /tmp/gather-mind-release-check
+```
+
+Machine-specific Android build instructions and the complete physical-device QA list are in [`AGENTS.md`](AGENTS.md). More mobile behavior and reminder-testing guidance live in [`mobile/README.md`](mobile/README.md).
+
+## Run the original web prototype
+
+The root command serves only the static prototype on port 4173:
 
 ```bash
 npm start
 ```
 
-Open `http://localhost:4173`. On a phone on the same network, use your computer's local network address in place of `localhost`. Installation is offered by supporting browsers after the app has been served over HTTPS (or from localhost).
+Open `http://localhost:4173`. Its data uses browser-local storage, and browser alarms are not dependable while it is closed. The repository-root `npm test` has no substantive mobile coverage.
 
-Run the logic tests with:
+## Current limitations and direction
 
-```bash
-npm test
-```
+- There is no backup, export/import, recovery password, account, or sync. Clearing app storage or uninstalling removes the only copy.
+- Real notification delivery, biometric behavior, encrypted migration, keyboard avoidance, and update-in-place behavior still require physical Android QA for each release.
+- Thought-to-appointment-plan conversion, one-level **Make this smaller** task steps, handled/archive state, thread-like grouping, and encrypted export/import remain planned rather than shipped.
+- Cloud AI, automatic appointment assignment, recursive thought hierarchies, gamification, analytics, and server backup are deliberately not current scope.
 
-For the reminder-enabled phone app, see [`mobile/README.md`](mobile/README.md). With Node.js 24 active, it can also be started from the project root with `npm run mobile`.
+The working product rationale and queued ideas are documented in [`docs/product-direction.md`](docs/product-direction.md). Gather Mind intentionally uses neutral language: items stay open rather than becoming overdue, capture can be messy, and there are no streaks or red failure badges.
 
-## Important MVP limits
+## Licence, privacy, and support
 
-- Data is local to one browser profile. Clearing site data removes it.
-- Browser alarms cannot be guaranteed while the web version is fully closed. Use the native app in `mobile/` for device-scheduled appointment reminders.
-- The optional connection view relates thoughts through shared words, themes, and appointment links. It does not perform semantic or diagnostic matching.
-
-## Suggested next product steps
-
-1. Test the capture and appointment-preparation flows with 5–8 target users.
-2. Add local encrypted export/import before users trust it with important records.
-3. Test notification timing under Android/iOS battery-saving and Focus modes.
-4. Only then consider optional sign-in and encrypted sync across devices.
-
-The app intentionally uses neutral, non-judgmental language: items are “open” rather than “overdue,” capture can be messy, and there are no streaks or red badges.
-
-Gather Mind is licensed under the [Apache License 2.0](LICENSE). Android release and Play Console preparation live in [`mobile/RELEASE.md`](mobile/RELEASE.md); the publishable [privacy policy](docs/privacy.html) and [support page](docs/support.html) are ready for static hosting.
+Gather Mind is licensed under the [Apache License 2.0](LICENSE). The publishable [privacy policy](docs/privacy.html), [support page](docs/support.html), and [Google Play disclosure draft](mobile/store/google-play.md) describe the current local-only behavior.
