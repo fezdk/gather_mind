@@ -1,6 +1,8 @@
 # Gather Mind support
 
-Gather Mind 0.5.4 is an Android-first beta. It works offline and does not require an account or backend.
+Gather Mind 0.5.8 is an Android-first beta. It works offline and does not require an account or backend.
+
+The app follows the phone's light or dark appearance by default. Choose a fixed mode under **Settings & privacy → Appearance** if preferred; the choice is stored locally on the phone.
 
 ## Reminder troubleshooting
 
@@ -10,8 +12,17 @@ Gather Mind 0.5.4 is an Android-first beta. It works offline and does not requir
 4. Some Android manufacturers require an app to be excluded from aggressive battery optimisation before time-sensitive alarms are dependable.
 5. Open the appointment and save it again after changing notification permissions.
 
+**Quiet daily status** is optional and off by default. Enable it and choose its time under **Settings & privacy → Daily goals**. It uses a separate silent channel, appears only when goals remain unfinished, and never includes their titles. Android can still hide a low-priority notification if that channel is disabled in system settings.
+
 ## Data and deletion
 
-All content is local to the phone. There is no server copy to restore. **Delete all local data** permanently removes all content and cancels scheduled Gather Mind reminders.
+All content is held in an encrypted database local to the phone. There is no server copy or recovery password. **Delete all local data** permanently removes all content and cancels scheduled Gather Mind reminders.
+
+## App lock troubleshooting
+
+- **Lock Gather Mind** is optional and is enabled in **Settings & privacy** after a successful strong fingerprint or secure face check.
+- If the biometric prompt is temporarily locked, unlock the phone normally and try again.
+- If every enrolled fingerprint or face was removed, add one again in the phone's settings before opening Gather Mind. The database key is kept separately, so changing biometric enrollment does not delete the data.
+- Clearing app storage or uninstalling removes the only local copy. Android cloud backup is disabled.
 
 For support, email [https://github.com/fezdk/gather_mind/issues](https://github.com/fezdk/gather_mind/issues).

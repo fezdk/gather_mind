@@ -1,4 +1,4 @@
-# Android release runbook — Gather Mind 0.5.4
+# Android release runbook — Gather Mind 0.5.8
 
 The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first Google Play upload; changing it later creates a different app.
 
@@ -20,7 +20,21 @@ npm test
 npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
-Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, daily rollover, move-to-tomorrow confirmation, and **Delete all local data**.
+Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, future first dates plus daily/weekly/monthly recurrence and move limits, move-to-tomorrow confirmation, and **Delete all local data**.
+
+Quiet-status checks should cover its default-off state, permission denial, enabling, changing its time to a few minutes ahead, delivery without sound/vibration/banner while the app is closed, correct singular/plural counts, no notification when all goals are complete, immediate removal/update after a goal changes, carry-over labels after midnight, tapping through the optional app lock to Today, disabling the setting, and verifying that no goal title appears on the lock screen.
+
+Appearance checks should cover Follow device while the system changes between light and dark, both manual overrides, restart persistence, the biometric lock/privacy cover, every tab and sheet, focused keyboard inputs, date/time pickers, status/navigation bars, and readable distress colours.
+
+Security and migration checks are release-blocking:
+
+1. Install the previous beta, create representative thoughts, goals, appointments, and plan items, then update in place to the candidate build. Confirm every item survives the one-time plaintext-to-SQLCipher migration.
+2. Restart the candidate twice and edit migrated content to confirm encrypted persistence.
+3. Turn **Lock Gather Mind** on and test successful authentication, cancellation, failure, Android hardware back, background/app-switcher locking, and returning from a notification.
+4. Add another enrolled fingerprint or face and confirm access still works. Remove every enrolled biometric, confirm the app remains locked, then re-enrol one and confirm the data is still readable.
+5. Confirm **Delete all local data** removes content after restart and cancels scheduled reminders.
+
+SQLCipher is not supported in Expo Go. These checks require a native development, preview, or release build.
 
 ## Build and distribute
 
@@ -36,7 +50,7 @@ Create the production Android App Bundle (`.aab`):
 npm run build:production:android
 ```
 
-The production profile auto-increments the remote Android version code while the user-visible version remains `0.5.4`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
+The production profile auto-increments the remote Android version code while the user-visible version remains `0.5.8`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
 
 ```bash
 npm run submit:android
@@ -46,4 +60,4 @@ Promote from internal testing only after the console declarations, privacy/suppo
 
 ## iOS preparation
 
-The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.5.4.
+The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.5.8.

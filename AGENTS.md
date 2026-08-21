@@ -12,7 +12,10 @@ Start future Codex sessions from that directory. The earlier Codex workspace pat
 
 - The mobile app is in `mobile/`; the repository-root `npm start` only serves the static prototype on port 4173.
 - Run the actual app with `npm --prefix mobile start` (Expo/Metro). Metro is a development asset server, not the app's data backend.
-- The installed app is local-first and has no backend, account, analytics, advertising, or cloud sync. User content is stored in private on-device SQLite storage.
+- The installed app is local-first and has no backend, account, analytics, advertising, or cloud sync. User content is stored in an on-device SQLCipher database; its random 256-bit key is held separately in Expo SecureStore.
+- SQLCipher is enabled through the `expo-sqlite` config plugin and is not supported in Expo Go. Use a native development, preview, or release build for runtime testing.
+- Existing `expo-sqlite/kv-store` content is migrated copy-first. Preserve the migration and never remove or overwrite the legacy value until the encrypted write has been read back successfully.
+- The optional app lock uses local device authentication and is deliberately separate from the database key, so biometric enrollment changes do not destroy the only key copy.
 - Keep Android Internet access blocked unless the user explicitly changes the privacy model. `mobile/app.json` also disables Android cloud backup.
 - Appointment reminders are local OS notifications. Test real scheduled appointment reminders on a physical Android device.
 - The permanent Android package and future iOS bundle identifier are both `dk.fez.gathermind`.
@@ -72,7 +75,10 @@ Physical-device release checks should cover:
 - theme autocomplete and thought search filtering;
 - notification denial/approval and a real reminder delivered while the app is closed;
 - daily rollover, daily non-deferrable goals, move-to-tomorrow confirmation, and distress colors;
+- calm carry-over labels plus the optional quiet daily status: chosen time, silent delivery, count updates/removal, tap-to-Today, permission denial, and default-off behavior;
 - Delete all local data, including cancellation of scheduled reminders.
+- update in place from the previous plaintext beta and confirm all content survives the one-time SQLCipher migration;
+- biometric app-lock enable/disable, cancellation/failure, background locking, notification entry, and biometric removal/re-enrollment.
 
 ## Versioning a release
 

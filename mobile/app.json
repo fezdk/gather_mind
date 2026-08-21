@@ -2,9 +2,10 @@
   "expo": {
     "name": "Gather Mind",
     "slug": "gather-mind",
-    "version": "0.5.4",
+    "version": "0.5.8",
     "description": "A calm, local-first companion for thoughts, gentle daily goals, and appointment plans.",
     "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
     "scheme": "gathermind",
     "icon": "./assets/icon.png",
     "backgroundColor": "#F7F3EA",
@@ -17,14 +18,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "dk.fez.gathermind",
-      "buildNumber": "9",
+      "buildNumber": "13",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "dk.fez.gathermind",
-      "versionCode": 9,
+      "versionCode": 13,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
@@ -48,8 +49,19 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       "@react-native-community/datetimepicker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Gather Mind to use Face ID to unlock your private local data."
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -57,7 +69,8 @@
           "color": "#416555",
           "defaultChannel": "appointments"
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
