@@ -31,6 +31,28 @@ export function authenticationCanComplete({
     && generation === currentGeneration;
 }
 
+type AutomaticUnlockRequest = {
+  appState: AppVisibility;
+  lockEnabled: boolean;
+  lockStatus: 'checking' | 'locked' | 'unlocking' | 'unlocked';
+  authenticating: boolean;
+  attempted: boolean;
+};
+
+export function automaticUnlockShouldStart({
+  appState,
+  lockEnabled,
+  lockStatus,
+  authenticating,
+  attempted,
+}: AutomaticUnlockRequest): boolean {
+  return appState === 'active'
+    && lockEnabled
+    && lockStatus === 'locked'
+    && !authenticating
+    && !attempted;
+}
+
 type NotificationCleanup = {
   cancelScheduled: () => Promise<void>;
   dismissDelivered: () => Promise<void>;

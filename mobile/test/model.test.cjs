@@ -26,12 +26,15 @@ const {
   suggestedAppointments,
   suggestedTags,
   taskCarryOverLabel,
+  taskStepSummary,
   tasksForToday,
   tasksForTomorrow,
   tasksScheduledAhead,
   toggleTaskCompletion,
+  toggleTaskStep,
   unlinkedThoughts,
   updateTaskSchedule,
+  updateTaskSteps,
 } = require('../src/model.ts');
 const { parseEditorDraft, parseStoredState } = require('../src/stored-state.ts');
 const { dailyStatusPlan, unfinishedGoalCount, validDailyStatusMinutes } = require('../src/daily-status.ts');
@@ -46,11 +49,12 @@ const baseTask = {
   recurrenceAnchor: today,
   offsetCount: 0,
   createdAt: '2026-08-18T08:00:00.000Z',
+  steps: [],
 };
 
 test('new installations start with no demo or personal data', () => {
   assert.deepEqual(createEmptyState(), {
-    version: 3,
+    version: 4,
     thoughts: [],
     appointments: [],
     tasks: [],
@@ -64,10 +68,24 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const legacy = { version: 1, thoughts: [{ id: 'legacy' }], appointments: [] };
   assert.deepEqual(parseStoredState(JSON.stringify(legacy), 'test storage'), {
-    version: 3,
+    version: 4,
     thoughts: [{ id: 'legacy' }],
     appointments: [],
     tasks: [],
+  });
+
+  const versionThree = {
+    version: 3,
+    thoughts: [],
+    appointments: [],
+    tasks: [{ ...baseTask, steps: undefined }],
+  };
+  delete versionThree.tasks[0].steps;
+  assert.deepEqual(parseStoredState(JSON.stringify(versionThree), 'test storage'), {
+    version: 4,
+    thoughts: [],
+    appointments: [],
+    tasks: [baseTask],
   });
 
   const versionTwo = {
@@ -80,8 +98,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
     ],
   };
   assert.deepEqual(parseStoredState(JSON.stringify(versionTwo), 'test storage').tasks, [
-    { id: 'once', title: 'Once', scheduledFor: today, completedOn: null, offsetCount: 1, createdAt: 'now', recurrence: 'once', recurrenceAnchor: today },
-    { id: 'daily', title: 'Daily', scheduledFor: today, completedOn: null, offsetCount: 0, createdAt: 'now', recurrence: 'daily', recurrenceAnchor: today },
+    { id: 'once', title: 'Once', scheduledFor: today, completedOn: null, offsetCount: 1, createdAt: 'now', recurrence: 'once', recurrenceAnchor: today, steps: [] },
+    { id: 'daily', title: 'Daily', scheduledFor: today, completedOn: null, offsetCount: 0, createdAt: 'now', recurrence: 'daily', recurrenceAnchor: today, steps: [] },
   ]);
 });
 
@@ -96,9 +114,10 @@ test('encrypted editor drafts accept supported forms and reject malformed conten
     location: 'Clinic', reminderMinutes: 60,
   };
   assert.deepEqual(parseEditorDraft(JSON.stringify(appointmentDraft)), appointmentDraft);
-  assert.deepEqual(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', scheduledFor: '2026-08-25' })), { kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', scheduledFor: '2026-08-25' });
-  assert.deepEqual(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Water', isDaily: true })), { kind: 'task', itemId: null, title: 'Water', recurrence: 'daily' });
+  assert.deepEqual(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', scheduledFor: '2026-08-25', steps: [{ id: 'first', text: 'Find the bins' }] })), { kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', scheduledFor: '2026-08-25', steps: [{ id: 'first', text: 'Find the bins' }] });
+  assert.deepEqual(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Water', isDaily: true })), { kind: 'task', itemId: null, title: 'Water', recurrence: 'daily', steps: [] });
   assert.equal(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', scheduledFor: 'not-a-date' })), null);
+  assert.equal(parseEditorDraft(JSON.stringify({ kind: 'task', itemId: null, title: 'Bins', recurrence: 'weekly', steps: [{ id: 'same', text: 'One' }, { id: 'same', text: 'Two' }] })), null);
   assert.equal(parseEditorDraft('{not json'), null);
   assert.equal(parseEditorDraft(JSON.stringify({ ...appointmentDraft, reminderMinutes: 'soon' })), null);
   assert.equal(parseEditorDraft(JSON.stringify({ kind: 'unknown', text: 'private' })), null);
@@ -180,7 +199,7 @@ test('weekly and monthly recurrence preserve their calendar rhythm', () => {
   assert.equal(nextTaskOccurrence('2026-01-31', '2026-02-28', 'monthly'), '2026-03-31');
 });
 
-test('daily, weekly, and monthly goals can start on a future first occurrence', () => {
+test('one-off and recurring goals can start on a future planned date', () => {
   const now = new Date(2026, 7, 18, 10, 0);
   const daily = createTask('Medicine', 'daily', '2026-08-25', now);
   assert.equal(daily.scheduledFor, '2026-08-25');
@@ -197,7 +216,19 @@ test('daily, weekly, and monthly goals can start on a future first occurrence', 
   assert.deepEqual(tasksScheduledAhead([weekly], today).map((task) => task.id), [weekly.id]);
 
   const oneOff = createTask('Call', 'once', '2026-08-25', now);
-  assert.equal(oneOff.scheduledFor, today);
+  assert.equal(oneOff.scheduledFor, '2026-08-25');
+  assert.equal(oneOff.recurrenceAnchor, '2026-08-25');
+  assert.equal(oneOff.offsetCount, 0);
+  assert.equal(tasksForToday([oneOff], today).length, 0);
+  assert.deepEqual(tasksScheduledAhead([oneOff], today).map((task) => task.id), [oneOff.id]);
+  assert.deepEqual(tasksForToday([oneOff], '2026-08-25').map((task) => task.id), [oneOff.id]);
+  assert.deepEqual(tasksForToday([oneOff], '2026-08-26').map((task) => task.id), [oneOff.id]);
+  assert.equal(taskCarryOverLabel(oneOff, '2026-08-26'), 'Planned yesterday');
+  const oneOffTomorrow = createTask('Post letter', 'once', '2026-08-19', now);
+  assert.equal(oneOffTomorrow.offsetCount, 0);
+  assert.deepEqual(tasksForTomorrow([oneOffTomorrow], today).map((task) => task.id), [oneOffTomorrow.id]);
+  const pastOneOff = createTask('Past', 'once', '2026-08-01', now);
+  assert.equal(pastOneOff.scheduledFor, today);
   const pastMonthly = createTask('Budget', 'monthly', '2026-08-01', now);
   assert.equal(pastMonthly.scheduledFor, today);
 });
@@ -220,14 +251,31 @@ test('editing the next recurring date resets the calendar rhythm and move allowa
   assert.equal(delayedDaily.scheduledFor, '2026-08-19');
   assert.equal(delayedDaily.recurrenceAnchor, '2026-08-19');
   assert.deepEqual(tasksForTomorrow([delayedDaily], today).map((task) => task.id), ['task']);
+
+  const movedOneOff = { ...baseTask, offsetCount: 3 };
+  const plannedOneOff = updateTaskSchedule(movedOneOff, 'once', '2026-08-22', today);
+  assert.equal(plannedOneOff.scheduledFor, '2026-08-22');
+  assert.equal(plannedOneOff.recurrenceAnchor, '2026-08-22');
+  assert.equal(plannedOneOff.offsetCount, 0);
+  assert.equal(plannedOneOff.completedOn, null);
+
+  const completedOneOff = { ...baseTask, completedOn: today };
+  const reusedForFuture = updateTaskSchedule(completedOneOff, 'once', '2026-08-22', today);
+  assert.equal(reusedForFuture.scheduledFor, '2026-08-22');
+  assert.equal(reusedForFuture.completedOn, null);
+
+  const overdueUnchanged = { ...baseTask, scheduledFor: '2026-08-15' };
+  assert.equal(updateTaskSchedule(overdueUnchanged, 'once', '2026-08-15', today), overdueUnchanged);
 });
 
-test('scheduled-ahead goals exclude tomorrow and the occurrence completed today', () => {
+test('scheduled-ahead goals include future one-offs but exclude tomorrow and the occurrence completed today', () => {
   const tomorrow = { ...baseTask, id: 'tomorrow', recurrence: 'weekly', scheduledFor: '2026-08-19' };
+  const tomorrowOnce = { ...baseTask, id: 'tomorrow-once', scheduledFor: '2026-08-19' };
   const futureDaily = { ...baseTask, id: 'daily', recurrence: 'daily', scheduledFor: '2026-08-22' };
+  const futureOnce = { ...baseTask, id: 'once', scheduledFor: '2026-08-23' };
   const nextWeek = { ...baseTask, id: 'next-week', recurrence: 'weekly', scheduledFor: '2026-08-25' };
   const completed = { ...baseTask, id: 'completed', recurrence: 'monthly', scheduledFor: '2026-09-18', completedOn: today };
-  assert.deepEqual(tasksScheduledAhead([completed, nextWeek, tomorrow, futureDaily], today).map((task) => task.id), ['daily', 'next-week']);
+  assert.deepEqual(tasksScheduledAhead([completed, nextWeek, tomorrow, tomorrowOnce, futureOnce, futureDaily], today).map((task) => task.id), ['daily', 'once', 'next-week']);
 });
 
 test('weekly goals allow two moves and monthly goals allow five per occurrence', () => {
@@ -247,6 +295,88 @@ test('completing a recurring goal advances and resets its move allowance, while 
   assert.equal(completed.offsetCount, 0);
   assert.deepEqual(completed.completedOccurrence, { scheduledFor: '2026-08-20', offsetCount: 2 });
   assert.deepEqual(toggleTaskCompletion(completed, '2026-08-20'), movedWeekly);
+});
+
+test('goal steps stay inside their parent and the last check completes the goal', () => {
+  const task = {
+    ...baseTask,
+    steps: [{ id: 'first', text: 'Find the number' }, { id: 'second', text: 'Make the call' }],
+  };
+  const afterFirst = toggleTaskStep(task, 'first', today);
+  assert.equal(afterFirst.completedOn, null);
+  assert.deepEqual(taskStepSummary(afterFirst, today), {
+    total: 2,
+    completed: 1,
+    completedStepIds: ['first'],
+    nextStep: { id: 'second', text: 'Make the call' },
+  });
+
+  const completed = toggleTaskStep(afterFirst, 'second', today);
+  assert.equal(completed.completedOn, today);
+  assert.deepEqual(taskStepSummary(completed, today).completedStepIds, ['first', 'second']);
+});
+
+test('daily step checks reset on the next day without changing their definitions', () => {
+  const daily = {
+    ...baseTask,
+    recurrence: 'daily',
+    steps: [{ id: 'morning', text: 'Take the tablet' }],
+  };
+  const completed = toggleTaskStep(daily, 'morning', today);
+  assert.equal(taskStepSummary(completed, today).completed, 1);
+  assert.deepEqual(taskStepSummary(completed, '2026-08-19'), {
+    total: 1,
+    completed: 0,
+    completedStepIds: [],
+    nextStep: { id: 'morning', text: 'Take the tablet' },
+  });
+});
+
+test('recurring goals preserve step progress when moved and restore it when reopened', () => {
+  const weekly = {
+    ...baseTask,
+    recurrence: 'weekly',
+    steps: [{ id: 'wash', text: 'Wash clothes' }, { id: 'fold', text: 'Fold clothes' }],
+  };
+  const inProgress = toggleTaskStep(weekly, 'wash', today);
+  const moved = { ...inProgress, scheduledFor: '2026-08-19', offsetCount: 1 };
+  assert.equal(taskStepSummary(moved, '2026-08-19').completed, 1);
+
+  const completed = toggleTaskCompletion(moved, '2026-08-19');
+  assert.equal(taskStepSummary(completed, '2026-08-19').completed, 1);
+  assert.equal(taskStepSummary(completed, '2026-08-25').completed, 0);
+  const reopened = toggleTaskCompletion(completed, '2026-08-19');
+  assert.equal(reopened.scheduledFor, '2026-08-19');
+  assert.equal(reopened.offsetCount, 1);
+  assert.equal(taskStepSummary(reopened, '2026-08-19').completed, 1);
+});
+
+test('editing goal steps keeps valid checks and drops removed ones', () => {
+  const inProgress = {
+    ...baseTask,
+    steps: [{ id: 'keep', text: 'Keep this' }, { id: 'remove', text: 'Remove this' }],
+    stepProgress: { occurrence: today, completedStepIds: ['keep', 'remove'] },
+  };
+  const edited = updateTaskSteps(inProgress, [{ id: 'keep', text: 'Renamed step' }, { id: 'blank', text: '   ' }]);
+  assert.deepEqual(edited.steps, [{ id: 'keep', text: 'Renamed step' }]);
+  assert.deepEqual(edited.stepProgress, { occurrence: today, completedStepIds: ['keep'] });
+});
+
+test('removing every goal step also removes its stored occurrence progress', () => {
+  const inProgress = {
+    ...baseTask,
+    steps: [{ id: 'only', text: 'Only step' }],
+    stepProgress: { occurrence: today, completedStepIds: ['only'] },
+    completedOccurrence: {
+      scheduledFor: today,
+      offsetCount: 1,
+      stepProgress: { occurrence: today, completedStepIds: ['only'] },
+    },
+  };
+  const edited = updateTaskSteps(inProgress, []);
+  assert.deepEqual(edited.steps, []);
+  assert.equal(edited.stepProgress, undefined);
+  assert.deepEqual(edited.completedOccurrence, { scheduledFor: today, offsetCount: 1 });
 });
 
 test('a recurring goal reappears when its next scheduled occurrence is due', () => {
@@ -285,6 +415,7 @@ test('a thought becomes a one-off goal today while retaining its source link', (
     recurrenceAnchor: today,
     offsetCount: 0,
     createdAt: '2026-08-18T09:30:00.000Z',
+    steps: [],
     sourceThoughtId: 'source',
   });
 });

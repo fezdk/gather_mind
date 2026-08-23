@@ -4,6 +4,24 @@ All notable Gather Mind changes are documented here.
 
 ## Unreleased
 
+- Fixed Android hardware back, the close button, and accessibility escape in the goal editor so native event objects cannot be mistaken for an editor-transition callback and crash the app; audited and hardened the remaining sheet and native-event close paths against the same failure mode.
+- Warned before closing thought, goal, appointment, or appointment-plan forms with material unsaved changes, while allowing unchanged forms and already auto-saved goal steps to close normally.
+- Restored the visible **↶ Today** affordance for bringing a deliberately postponed goal back, and restored clear outlines around Today and per-goal step progress bars.
+- Completed an Android accessibility pass with persistent form labels, named controls and checkboxes, selected/expanded/disabled states, headings, modal focus, and polite TalkBack announcements for result counts and Undo feedback.
+- Raised interactive targets to at least 48 dp, added a large-text fallback for the visual thought map, and respected the device's reduced-motion preference for sheets and goal animations.
+- Corrected light/dark secondary-text and moved-goal colour contrast, with automated 4.5:1 normal-text contrast checks for shared surfaces and every move colour.
+- Added **Today**, **Tomorrow**, and **Choose date** planning to one-off goals, keeping intentional future plans at `Moved 0×` and showing them quietly before their day.
+- Started biometric unlock automatically when returning to a timed-out or newly opened locked app, while retaining the unlock button as a retry after cancellation or failure.
+- Replaced the parent checkbox on goals with steps with a compact overall-progress badge, so the parent state is visually distinct from its checkable steps.
+- Moved the goal-step disclosure arrow below the parent summary and the collapse arrow below the full expanded list.
+- Saved step edits and explicit removals directly to an existing goal when a field loses focus, without also committing unfinished title, schedule, or recurrence edits.
+
+## 0.5.9 — 2026-08-22
+
+- Added optional one-level goal steps through **Make this smaller**, with compact progress and the next unfinished step available directly from Today.
+- Made checking the last goal step complete its parent goal automatically with Undo, while completing the parent directly leaves individual step history honest.
+- Kept step progress with a weekly, monthly, or one-off occurrence when it is carried over or moved, and reset the checks for each new recurring occurrence.
+
 ## 0.5.8 — 2026-08-21
 
 - Added a calm “Planned yesterday” or “Planned N days ago” marker to unfinished one-off, weekly, and monthly goals carried into Today, without counting the carry-over as a deliberate move.

@@ -1,6 +1,6 @@
 # Gather Mind support
 
-Gather Mind 0.5.8 is an Android-first beta. It works offline and does not require an account or backend.
+Gather Mind 0.5.9 is an Android-first beta. It works offline and does not require an account or backend.
 
 The app follows the phone's light or dark appearance by default. Choose a fixed mode under **Settings & privacy → Appearance** if preferred; the choice is stored locally on the phone.
 
@@ -21,6 +21,7 @@ All content is held in an encrypted database local to the phone. There is no ser
 ## App lock troubleshooting
 
 - **Lock Gather Mind** is optional and is enabled in **Settings & privacy** after a successful strong fingerprint or secure face check.
+- When a locked app opens or returns after its timeout, the biometric prompt starts automatically. Cancelling it leaves the app locked; use **Unlock Gather Mind** when you are ready to try again.
 - If the biometric prompt is temporarily locked, unlock the phone normally and try again.
 - If every enrolled fingerprint or face was removed, add one again in the phone's settings before opening Gather Mind. The database key is kept separately, so changing biometric enrollment does not delete the data.
 - Clearing app storage or uninstalling removes the only local copy. Android cloud backup is disabled.

@@ -1,6 +1,6 @@
 # Gather Mind product direction
 
-Working product notes, not a committed release scope. Last updated 2026-08-21.
+Working product notes, not a committed release scope. Last updated 2026-08-22.
 
 ## Product promise
 
@@ -23,7 +23,7 @@ The app should remain calm, local-first, understandable without setup, and usefu
 
 ## Implementation status
 
-Implemented in the current working tree but not yet released:
+Included through the 0.5.9 source build:
 
 - Default SQLCipher database encryption with a random 256-bit key in the operating system's secure key store.
 - Copy-first migration from the previous plaintext key-value store, with encrypted read-back verification before the old value is scrubbed.
@@ -33,15 +33,17 @@ Implemented in the current working tree but not yet released:
 - Up to three local, optional appointment suggestions from the previous 7 days or next 30 days, with matching words taking priority.
 - Contextual theme suggestions that prioritize themes already used with the selected or suggested appointments.
 - Thought-to-goal conversion that keeps the original thought and links the new one-off goal back to it.
-- Daily, weekly, and monthly goals with selectable first dates and visible future occurrences.
+- One-off, daily, weekly, and monthly goals with selectable planned/first dates and visible future occurrences; advance planning stays distinct from deferral history.
 - A locally persisted light/dark/device-following appearance setting.
 - A quieter Today screen without a duplicate partial thought list; Thoughts remains the single searchable archive.
 - Calm planned-date labels for non-daily goals carried into Today, plus an optional locally scheduled quiet status at a user-chosen time with only the unfinished count.
+- Optional one-level goal steps through **Make this smaller**, with compact progress on Today and direct step check-off.
+- Automatic parent completion when the last step is checked, protected by Undo.
+- Per-occurrence step progress that survives carry-over and deliberate deferral, resets for each new recurring occurrence, and is restored when a completed weekly or monthly goal is reopened.
 
 Still queued:
 
 - thought-to-appointment-plan conversion;
-- one-level task breakdown through **Make this smaller**;
 - handled/archive state and thread-like grouping;
 - encrypted export/import and recovery testing.
 
@@ -120,34 +122,39 @@ Conversion should retain a reference to the source thought so the user can retur
 
 ## Breaking a large task into steps
 
-Add an optional **Make this smaller** action to a today's goal. The first version should be manual and guided rather than cloud-AI powered.
+The optional **Make this smaller** action on a goal is manual and guided rather than cloud-AI powered.
 
-Suggested interaction:
+Implemented interaction:
 
 - Open it from the task editor or a small secondary action on the task.
 - Ask `What is the smallest first step?` before showing an empty multi-field form.
 - Allow one level of checklist steps under the parent task.
 - Keep the parent in its current position while steps are expanded or completed.
 - Show quiet progress such as `2 of 4 steps`.
-- When every step is complete, offer to complete the parent; do not unexpectedly move it.
-- Allow a completed step or parent action to be undone.
+- Checking the final step completes the parent in place and offers Undo for the combined action.
+- A step can be unchecked directly; fast parent completion and deferral actions retain their existing Undo.
 
-Potential model:
+Implemented model:
 
 ```ts
 type TaskStep = {
   id: string;
-  title: string;
-  completed: boolean;
+  text: string;
+};
+
+type TaskStepProgress = {
+  occurrence: string;
+  completedStepIds: string[];
 };
 
 type DailyTask = {
   // existing fields
   steps: TaskStep[];
+  stepProgress?: TaskStepProgress;
 };
 ```
 
-Do not make steps independent daily goals in the first version. Keeping them under their parent avoids list reordering and extra scheduling decisions.
+Steps are not independent daily goals. Keeping definitions under their parent and completion state on the current occurrence avoids list reordering and extra scheduling decisions. Explicitly moving an occurrence preserves its progress; completing it prepares a blank set of checks for the next recurrence.
 
 Later research can compare manual guidance with private on-device assistance. Remote AI should not be introduced implicitly because it would change the privacy promise.
 
@@ -239,10 +246,9 @@ This can support medical appointments without making diagnoses or requiring a co
 
 ### Following product release
 
-1. One-level task steps through **Make this smaller**.
-2. Handled/archive state for thoughts.
-3. Prototype thread-like grouping using themes; validate before adding a new entity.
-4. Appointment follow-up and user-initiated summary/export.
+1. Handled/archive state for thoughts.
+2. Prototype thread-like grouping using themes; validate before adding a new entity.
+3. Appointment follow-up and user-initiated summary/export.
 
 ### Privacy and resilience project
 

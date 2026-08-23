@@ -22,6 +22,7 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+AGENTS.local.md
 *.jks
 *.keystore
 *.p8

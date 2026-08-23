@@ -1,6 +1,6 @@
 # Gather Mind
 
-Current Android beta: **0.5.8** · Application ID: `dk.fez.gathermind` · [Download the latest release](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8)
+Current source build: **0.5.9** · Application ID: `dk.fez.gathermind` · Latest published GitHub release: [v0.5.8](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8)
 
 Gather Mind is a calm, local-first Android app for catching thoughts, planning appointments, and choosing manageable goals when cognitive load is high. It is informed by needs associated with AuDHD and menopause-related brain fog without making medical claims or attempting diagnosis.
 
@@ -13,7 +13,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - iOS configuration is prepared by the cross-platform framework, but no iPhone build is currently shipped or tested. Tablet work is also out of scope.
 - The repository root contains the original static web prototype. It remains useful for quick browser experiments but is not the release app and does not share native app data.
 
-## What 0.5.8 includes
+## What the current app includes
 
 ### Thoughts and connections
 
@@ -25,11 +25,13 @@ Everything entered in the native app stays on the phone. There is no account, ba
 
 ### Goals and Today
 
-- Create one-off, daily, weekly, or monthly goals with an optional first occurrence date.
+- Create one-off, daily, weekly, or monthly goals with an optional planned or first-occurrence date; one-offs offer quick Today and Tomorrow choices without pretending advance planning was a deferral.
 - Keep daily essentials on Today without deferral; weekly and monthly occurrences can be moved at most 2 or 5 times respectively.
 - Keep unfinished goals visible with calm labels such as `Planned yesterday`, while explicitly deferred goals retain their `Moved ×` history.
 - Complete, reopen, defer, or restore goals with stable swipe behavior and a temporary Undo action.
-- See future recurring goals under a quieter **Scheduled ahead** section.
+- Optionally break a goal into one level of smaller steps, check them directly from Today, and complete the parent automatically with Undo when the last step is checked.
+- Preserve step progress while an occurrence is carried over or moved, then reset it for each new daily, weekly, or monthly occurrence.
+- See future goals under quieter Tomorrow and **Scheduled ahead** sections until their planned day.
 - Optionally show a silent notification-list count of unfinished goals at a configurable time. It is off by default and never includes goal titles.
 
 ### Appointments
@@ -43,9 +45,11 @@ Everything entered in the native app stays on the phone. There is no account, ba
 
 - Store content in a SQLCipher-encrypted SQLite database with a random 256-bit key held separately in Expo SecureStore.
 - Migrate older beta data copy-first and verify the encrypted copy before removing the legacy plaintext value.
-- Optionally lock the app with strong device biometrics after an immediate, 1, 5, or 15 minute timeout. The lock remains separate from the database key so biometric enrollment changes do not destroy the only key copy.
+- Optionally lock the app with strong device biometrics after an immediate, 1, 5, or 15 minute timeout. Unlock starts automatically when the locked app becomes active, with a manual retry after cancellation. The lock remains separate from the database key so biometric enrollment changes do not destroy the only key copy.
 - Preserve unfinished editor drafts across a short app switch or an app-lock timeout.
 - Follow the phone's appearance or use a fixed Light or Dark mode.
+- Support TalkBack with named controls, form labels, selection and checkbox states, modal focus, live Undo/result announcements, and a non-gesture move-to-tomorrow action.
+- Keep interactive targets at least 48 dp, preserve 4.5:1 normal-text contrast on shared surfaces and move colours, follow reduced-motion settings, and replace the geometric thought map at large font sizes.
 - Disable Android cloud backup and provide an in-app control that deletes all local content and cancels scheduled notifications.
 
 ## Install the Android beta
@@ -72,7 +76,54 @@ npm test
 npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
-Machine-specific Android build instructions and the complete physical-device QA list are in [`AGENTS.md`](AGENTS.md). More mobile behavior and reminder-testing guidance live in [`mobile/README.md`](mobile/README.md).
+### Build a verified local Android APK
+
+The canonical development machine uses Node 24.3.0, JDK 17, Android SDK 36, and the existing sideload-beta signing lineage. Follow this sequence for every local APK so the generated native project, artifact naming, and verification are consistent:
+
+1. Confirm the intended version is synchronized across both `package.json` files, `mobile/app.json`, the visible Settings version, and the release documentation. Android `versionCode` and iOS `buildNumber` must increase for a new release.
+2. From `mobile/`, run the checks and export with the known-working Node version:
+
+```bash
+PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm run check
+PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm test
+/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin/node node_modules/expo/bin/cli export --platform android --output-dir /tmp/gather-mind-release-check
+```
+
+3. Run `git diff --check` from the repository root. Then confirm the ignored `mobile/android/` tree contains no user-authored work before replacing it with a clean Expo prebuild:
+
+```bash
+cd mobile
+PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node_modules/.bin/expo prebuild --platform android --no-install --clean
+npm pkg set "scripts.android=expo start --android" "scripts.ios=expo start --ios"
+cd ..
+git diff -- mobile/package.json mobile/package-lock.json
+```
+
+The package diff must contain only the already-intended source changes; Expo must not leave `expo run:*` script changes behind.
+
+4. Build the native release from `mobile/android/`:
+
+```bash
+cd mobile/android
+JAVA_HOME=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2 ANDROID_HOME=/home/nezar/Android/Sdk PATH=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2/bin:/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/home/nezar/Android/Sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ./gradlew :app:assembleRelease
+cd ../..
+cp mobile/android/app/build/outputs/apk/release/app-release.apk releases/Gather-Mind-X.Y.Z.apk
+```
+
+Replace `X.Y.Z` with the verified version. The generated native directory and APK are ignored build products and must not be committed.
+
+5. Inspect the copied artifact with the installed Android SDK tools:
+
+```bash
+/home/nezar/Android/Sdk/build-tools/36.0.0/aapt dump badging releases/Gather-Mind-X.Y.Z.apk
+/home/nezar/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs releases/Gather-Mind-X.Y.Z.apk
+/home/nezar/Android/Sdk/build-tools/36.0.0/zipalign -c -v 4 releases/Gather-Mind-X.Y.Z.apk
+sha256sum releases/Gather-Mind-X.Y.Z.apk
+```
+
+Verify package `dk.fez.gathermind`, the intended version name/code, min SDK 24, target SDK 36, APK Signature Scheme v2, successful alignment, and beta certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Report the APK checksum with the handoff. Distribution is deliberately not prescribed here; APK upload configuration belongs in each developer's private local tooling.
+
+The authoritative agent workflow and complete physical-device QA list are in [`AGENTS.md`](AGENTS.md). More mobile behavior and reminder-testing guidance live in [`mobile/README.md`](mobile/README.md).
 
 ## Run the original web prototype
 
@@ -88,7 +139,7 @@ Open `http://localhost:4173`. Its data uses browser-local storage, and browser a
 
 - There is no backup, export/import, recovery password, account, or sync. Clearing app storage or uninstalling removes the only copy.
 - Real notification delivery, biometric behavior, encrypted migration, keyboard avoidance, and update-in-place behavior still require physical Android QA for each release.
-- Thought-to-appointment-plan conversion, one-level **Make this smaller** task steps, handled/archive state, thread-like grouping, and encrypted export/import remain planned rather than shipped.
+- Thought-to-appointment-plan conversion, handled/archive state, thread-like grouping, and encrypted export/import remain planned rather than shipped.
 - Cloud AI, automatic appointment assignment, recursive thought hierarchies, gamification, analytics, and server backup are deliberately not current scope.
 
 The working product rationale and queued ideas are documented in [`docs/product-direction.md`](docs/product-direction.md). Gather Mind intentionally uses neutral language: items stay open rather than becoming overdue, capture can be messy, and there are no streaks or red failure badges.

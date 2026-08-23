@@ -14,6 +14,7 @@ require.extensions['.ts'] = (module, filename) => {
 
 const {
   authenticationCanComplete,
+  automaticUnlockShouldStart,
   awayDurationRequiresLock,
   clearPrivateNotifications,
   removePrivateReminder,
@@ -53,6 +54,22 @@ test('secure-device fallback may return from background and complete only when a
   assert.equal(authenticationCanComplete({ ...base, appState: 'background' }), false);
   assert.equal(authenticationCanComplete({ ...base, appState: 'active' }), true);
   assert.equal(authenticationCanComplete({ ...base, appState: 'active', currentAttemptId: 5 }), false);
+});
+
+test('automatic unlock starts once per locked foreground visit without looping after cancellation', () => {
+  const ready = {
+    appState: 'active',
+    lockEnabled: true,
+    lockStatus: 'locked',
+    authenticating: false,
+    attempted: false,
+  };
+  assert.equal(automaticUnlockShouldStart(ready), true);
+  assert.equal(automaticUnlockShouldStart({ ...ready, attempted: true }), false);
+  assert.equal(automaticUnlockShouldStart({ ...ready, authenticating: true }), false);
+  assert.equal(automaticUnlockShouldStart({ ...ready, lockStatus: 'unlocking' }), false);
+  assert.equal(automaticUnlockShouldStart({ ...ready, appState: 'background' }), false);
+  assert.equal(automaticUnlockShouldStart({ ...ready, lockEnabled: false }), false);
 });
 
 test('notification privacy cleanup cancels, then dismisses, then clears the response', async () => {

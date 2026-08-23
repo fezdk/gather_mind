@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.5.8
+# Google Play listing and declarations — Gather Mind 0.5.9
 
 ## Product identity
 
@@ -12,7 +12,7 @@
 
 Gather Mind is a calm place to catch a thought before it disappears, see related ideas together, and prepare for any kind of appointment.
 
-Build a gentle daily list, check off completed goals without hiding them, and move goals to tomorrow with a deliberate confirmation. Calm labels show when unfinished goals were originally planned without treating carry-over as a deliberate move. Repeatedly moved items become warmer in colour so they are easier to notice without using streaks, shame, or alarming badges. Daily, weekly, and monthly goals can begin on a chosen date; daily essentials cannot be deferred, while weekly and monthly goals have a limited move allowance for each occurrence. An optional quiet status can show only the unfinished count after a chosen time, without sound or goal titles.
+Build a gentle daily list, optionally break larger goals into smaller checkable steps, plan a one-off goal for another day, and move already-due goals to tomorrow with a deliberate confirmation. Calm labels show when unfinished goals were originally planned without treating advance planning or carry-over as a deliberate move. Repeatedly moved items become warmer in colour so they are easier to notice without using streaks, shame, or alarming badges. Daily, weekly, and monthly goals can begin on a chosen date; daily essentials cannot be deferred, while weekly and monthly goals have a limited move allowance for each occurrence. An optional quiet status can show only the unfinished count after a chosen time, without sound or goal titles.
 
 Add appointments, choose local reminders, and keep questions, decisions, documents, errands, things to bring, and follow-ups together in a readable appointment plan.
 

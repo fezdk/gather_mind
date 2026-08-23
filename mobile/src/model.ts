@@ -25,6 +25,16 @@ export type Appointment = {
 
 export type TaskRecurrence = 'once' | 'daily' | 'weekly' | 'monthly';
 
+export type TaskStep = {
+  id: string;
+  text: string;
+};
+
+export type TaskStepProgress = {
+  occurrence: string;
+  completedStepIds: string[];
+};
+
 export type DailyTask = {
   id: string;
   title: string;
@@ -34,21 +44,24 @@ export type DailyTask = {
   recurrenceAnchor: string;
   offsetCount: number;
   createdAt: string;
+  steps: TaskStep[];
+  stepProgress?: TaskStepProgress;
   sourceThoughtId?: string;
   completedOccurrence?: {
     scheduledFor: string;
     offsetCount: number;
+    stepProgress?: TaskStepProgress;
   };
 };
 
 export type EditorDraft =
   | { kind: 'thought'; itemId: string | null; text: string; tags: string; appointmentId: string }
-  | { kind: 'task'; itemId: string | null; title: string; recurrence: TaskRecurrence; scheduledFor?: string }
+  | { kind: 'task'; itemId: string | null; title: string; recurrence: TaskRecurrence; scheduledFor?: string; steps: TaskStep[] }
   | { kind: 'appointment'; itemId: string | null; title: string; startsAt: string; location: string; reminderMinutes: number }
   | { kind: 'agenda'; appointmentId: string; itemId: string | null; text: string };
 
 export type AppState = {
-  version: 3;
+  version: 4;
   thoughts: Thought[];
   appointments: Appointment[];
   tasks: DailyTask[];
@@ -63,7 +76,7 @@ export const REMINDER_OPTIONS = [
 ] as const;
 
 export function createEmptyState(): AppState {
-  return { version: 3, thoughts: [], appointments: [], tasks: [] };
+  return { version: 4, thoughts: [], appointments: [], tasks: [] };
 }
 
 export function createGoalFromThought(thought: Thought, today = localDateKey(), now = new Date()): DailyTask {
@@ -76,14 +89,14 @@ export function createGoalFromThought(thought: Thought, today = localDateKey(), 
     recurrenceAnchor: today,
     offsetCount: 0,
     createdAt: now.toISOString(),
+    steps: [],
     sourceThoughtId: thought.id,
   };
 }
 
-export function createTask(title: string, recurrence: TaskRecurrence, firstOccurrence = localDateKey(), now = new Date()): DailyTask {
+export function createTask(title: string, recurrence: TaskRecurrence, firstOccurrence = localDateKey(), now = new Date(), steps: TaskStep[] = []): DailyTask {
   const today = localDateKey(now);
-  const scheduledRecurrence = recurrence !== 'once';
-  const scheduledFor = scheduledRecurrence && isLocalDateKey(firstOccurrence) && firstOccurrence >= today ? firstOccurrence : today;
+  const scheduledFor = isLocalDateKey(firstOccurrence) && firstOccurrence >= today ? firstOccurrence : today;
   return {
     id: makeId('task'),
     title,
@@ -93,7 +106,12 @@ export function createTask(title: string, recurrence: TaskRecurrence, firstOccur
     recurrenceAnchor: scheduledFor,
     offsetCount: 0,
     createdAt: now.toISOString(),
+    steps: normalizeTaskSteps(steps),
   };
+}
+
+export function createTaskStep(text = ''): TaskStep {
+  return { id: makeId('step'), text };
 }
 
 export function removeLegacySeedData(state: AppState): AppState {
@@ -116,6 +134,24 @@ const STOP_WORDS = new Set([
 
 export function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function normalizeTaskSteps(steps: TaskStep[]): TaskStep[] {
+  const seen = new Set<string>();
+  return steps.flatMap((step) => {
+    const id = step.id.trim();
+    const text = step.text.trim();
+    if (!id || !text || seen.has(id)) return [];
+    seen.add(id);
+    return [{ id, text }];
+  });
+}
+
+function cleanTaskStepProgress(progress: TaskStepProgress | undefined, steps: TaskStep[]): TaskStepProgress | undefined {
+  if (!progress?.occurrence) return undefined;
+  const validIds = new Set(steps.map((step) => step.id));
+  const completedStepIds = [...new Set(progress.completedStepIds.filter((id) => validIds.has(id)))];
+  return completedStepIds.length ? { occurrence: progress.occurrence, completedStepIds } : undefined;
 }
 
 export function tokenize(value = '') {
@@ -288,6 +324,65 @@ export function isTaskRecurrence(value: unknown): value is TaskRecurrence {
   return value === 'once' || value === 'daily' || value === 'weekly' || value === 'monthly';
 }
 
+export type TaskStepSummary = {
+  total: number;
+  completed: number;
+  completedStepIds: string[];
+  nextStep?: TaskStep;
+};
+
+export function taskStepSummary(task: DailyTask, today = localDateKey()): TaskStepSummary {
+  const storedProgress = task.completedOn === today
+    ? task.completedOccurrence?.stepProgress ?? task.stepProgress
+    : task.stepProgress;
+  const progress = task.recurrence === 'daily' && storedProgress?.occurrence !== today ? undefined : storedProgress;
+  const validIds = new Set(task.steps.map((step) => step.id));
+  const completedStepIds = [...new Set(progress?.completedStepIds.filter((id) => validIds.has(id)) ?? [])];
+  const completedIds = new Set(completedStepIds);
+  return {
+    total: task.steps.length,
+    completed: completedStepIds.length,
+    completedStepIds,
+    nextStep: task.steps.find((step) => !completedIds.has(step.id)),
+  };
+}
+
+export function updateTaskSteps(task: DailyTask, steps: TaskStep[]): DailyTask {
+  const normalizedSteps = normalizeTaskSteps(steps);
+  const stepProgress = cleanTaskStepProgress(task.stepProgress, normalizedSteps);
+  const completedStepProgress = cleanTaskStepProgress(task.completedOccurrence?.stepProgress, normalizedSteps);
+  const completedOccurrence = task.completedOccurrence
+    ? {
+      scheduledFor: task.completedOccurrence.scheduledFor,
+      offsetCount: task.completedOccurrence.offsetCount,
+      ...(completedStepProgress ? { stepProgress: completedStepProgress } : {}),
+    }
+    : undefined;
+  const { stepProgress: _stepProgress, completedOccurrence: _completedOccurrence, ...baseTask } = task;
+  return {
+    ...baseTask,
+    steps: normalizedSteps,
+    ...(stepProgress ? { stepProgress } : {}),
+    ...(completedOccurrence ? { completedOccurrence } : {}),
+  };
+}
+
+export function toggleTaskStep(task: DailyTask, stepId: string, today = localDateKey()): DailyTask {
+  if (task.completedOn === today || !task.steps.some((step) => step.id === stepId)) return task;
+  const summary = taskStepSummary(task, today);
+  const completedIds = new Set(summary.completedStepIds);
+  if (completedIds.has(stepId)) completedIds.delete(stepId);
+  else completedIds.add(stepId);
+  const completedStepIds = task.steps.filter((step) => completedIds.has(step.id)).map((step) => step.id);
+  const occurrence = task.recurrence === 'daily' ? today : task.stepProgress?.occurrence ?? task.scheduledFor;
+  const { stepProgress: _stepProgress, ...baseTask } = task;
+  const nextTask: DailyTask = {
+    ...baseTask,
+    ...(completedStepIds.length ? { stepProgress: { occurrence, completedStepIds } } : {}),
+  };
+  return completedStepIds.length === task.steps.length ? toggleTaskCompletion(nextTask, today) : nextTask;
+}
+
 export function taskPostponeLimit(recurrence: TaskRecurrence): number | null {
   if (recurrence === 'daily') return 0;
   if (recurrence === 'weekly') return 2;
@@ -340,7 +435,7 @@ export function nextTaskOccurrence(anchor: string, afterDate: string, recurrence
 export function updateTaskSchedule(task: DailyTask, recurrence: TaskRecurrence, requestedDate: string, today = localDateKey()): DailyTask {
   const scheduledRecurrence = recurrence !== 'once';
   const calendarRecurrence = recurrence === 'weekly' || recurrence === 'monthly';
-  if (task.recurrence === recurrence && (!scheduledRecurrence || task.scheduledFor === requestedDate)) return task;
+  if (task.recurrence === recurrence && task.scheduledFor === requestedDate) return task;
 
   const completedToday = task.completedOn === today;
   if (scheduledRecurrence) {
@@ -359,12 +454,13 @@ export function updateTaskSchedule(task: DailyTask, recurrence: TaskRecurrence, 
     };
   }
 
+  const plannedFor = isLocalDateKey(requestedDate) && requestedDate >= today ? requestedDate : today;
   return {
     ...task,
     recurrence,
-    recurrenceAnchor: today,
-    scheduledFor: today,
-    completedOn: completedToday ? today : null,
+    recurrenceAnchor: plannedFor,
+    scheduledFor: plannedFor,
+    completedOn: completedToday && plannedFor === today ? today : null,
     offsetCount: 0,
     completedOccurrence: undefined,
   };
@@ -374,21 +470,27 @@ export function toggleTaskCompletion(task: DailyTask, today = localDateKey()): D
   if (task.completedOn === today) {
     if (task.completedOccurrence) {
       const completedOccurrence = task.completedOccurrence;
-      const { completedOccurrence: _completedOccurrence, ...openTask } = task;
+      const { completedOccurrence: _completedOccurrence, stepProgress: _stepProgress, ...openTask } = task;
       return {
         ...openTask,
         completedOn: null,
         scheduledFor: completedOccurrence.scheduledFor,
         offsetCount: completedOccurrence.offsetCount,
+        ...(completedOccurrence.stepProgress ? { stepProgress: completedOccurrence.stepProgress } : {}),
       };
     }
     return { ...task, completedOn: null };
   }
   if (task.recurrence === 'weekly' || task.recurrence === 'monthly') {
+    const { stepProgress, ...taskWithoutStepProgress } = task;
     return {
-      ...task,
+      ...taskWithoutStepProgress,
       completedOn: today,
-      completedOccurrence: { scheduledFor: task.scheduledFor, offsetCount: task.offsetCount },
+      completedOccurrence: {
+        scheduledFor: task.scheduledFor,
+        offsetCount: task.offsetCount,
+        ...(stepProgress ? { stepProgress } : {}),
+      },
       scheduledFor: nextTaskOccurrence(task.recurrenceAnchor, today, task.recurrence),
       offsetCount: 0,
     };
@@ -411,8 +513,7 @@ export function tasksForTomorrow(tasks: DailyTask[], today = localDateKey()) {
 
 export function tasksScheduledAhead(tasks: DailyTask[], today = localDateKey()) {
   const tomorrow = dateKeyAfter(today, 1);
-  return tasks.filter((task) => task.recurrence !== 'once'
-    && task.completedOn !== today
+  return tasks.filter((task) => task.completedOn !== today
     && task.scheduledFor > tomorrow)
     .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
