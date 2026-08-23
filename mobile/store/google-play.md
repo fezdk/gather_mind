@@ -30,7 +30,8 @@ Gather Mind is an organisational aid, not a medical device, diagnosis, treatment
 - Account deletion: Not applicable because no account can be created. The in-app **Delete all local data** control erases content, the encrypted widget summary, and reminders.
 - Privacy-policy URL: host the project-level `docs/privacy.html` at a stable public HTTPS URL and enter it in Play Console.
 - Support URL: host the project-level `docs/support.html` at a stable public HTTPS URL.
-- Support email: `https://github.com/fezdk/gather_mind/issues`.
+- Public project support: `https://github.com/fezdk/gather_mind/issues`.
+- Support email: configure a monitored address privately in Play Console; do not store it in this repository.
 - Exact alarms: locally chosen appointment-reminder and quiet-status times use Expo's Android alarm scheduler, which calls exact alarms when access is available and otherwise falls back to inexact delivery. Document the user-facing appointment-reminder function and optional quiet status honestly if Play requests a declaration.
 - Health apps: review and complete the Health apps declaration honestly. The proposed store category and product function are Productivity/organisation, but the app may be used for medication or health appointments and Google can still consider that context relevant.
 - Target audience: choose the tested adult age groups; do not select children unless the product and disclosures are redesigned for them.

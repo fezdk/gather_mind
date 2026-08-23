@@ -9,7 +9,7 @@ The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first
 3. Link this directory to an EAS project: `npx eas-cli@latest init`.
 4. Keep Android signing credentials in EAS or another secure credential manager; never commit a keystore or service-account JSON file.
 5. Create the app in Play Console with package name `dk.fez.gathermind`.
-6. Host the project-level `docs/privacy.html` and `docs/support.html` at stable public HTTPS URLs. The monitored support email is `https://github.com/fezdk/gather_mind/issues`. A GitHub repository can publish the `docs/` folder directly with GitHub Pages.
+6. Host the project-level `docs/privacy.html` and `docs/support.html` at stable public HTTPS URLs. Public support uses the repository's GitHub Issues. Configure the monitored email required by Play Console privately; never commit it. A GitHub repository can publish the `docs/` folder directly with GitHub Pages.
 
 ## Verify the source
 

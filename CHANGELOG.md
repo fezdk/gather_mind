@@ -6,6 +6,7 @@ All notable Gather Mind changes are documented here.
 
 ## 0.6.0 — 2026-08-23
 
+- Moved public support to GitHub Issues and enabled private GitHub vulnerability reports so no personal support address needs to be published in the app or repository.
 - Added one responsive Android home-screen widget: compact sizes show today’s completed/total goal count, larger sizes add calm goal and appointment context, and taps return to the matching in-app view through the existing biometric lock.
 - Refreshed every placed widget instance immediately after goal changes through an observed Glance revision, and added a one-row wide layout that shows both goal context and the next appointment.
 - Kept widget titles private by default, added an explicit Settings opt-in for details visible on the home screen, and encrypted the bounded widget summary separately with Android Keystore while preserving the no-Internet model.

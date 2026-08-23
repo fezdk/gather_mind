@@ -37,6 +37,6 @@ Gather Mind's source code is available under the Apache License 2.0. That softwa
 
 ## Contact
 
-Privacy and support questions can be sent to [https://github.com/fezdk/gather_mind/issues](https://github.com/fezdk/gather_mind/issues).
+For non-sensitive privacy or support questions, open an issue in the project's [GitHub issue tracker](https://github.com/fezdk/gather_mind/issues). Do not include thoughts, goals, appointments, database files, device backups, biometric material, or other personal content in a public issue. Suspected vulnerabilities can be [reported privately through GitHub](https://github.com/fezdk/gather_mind/security/advisories/new).
 
 If Gather Mind later adds optional sync, accounts, analytics, or any other data transfer, this policy and the in-app notice must be updated before that feature is released.

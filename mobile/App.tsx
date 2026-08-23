@@ -1999,7 +1999,7 @@ function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onC
     <Text style={s.policyText}>Data remains until you delete individual items, use the control below, clear the app’s storage, or uninstall the app. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field heading>Support</Field>
     <Text style={s.policyText}>For a reminder problem, check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings. Open and save the appointment again after changing permissions.</Text>
-    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues?subject=Gather%20Mind%20support')} accessibilityRole="link"><Text style={s.secondaryText}>Email https://github.com/fezdk/gather_mind/issues</Text></Pressable>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues')} accessibilityRole="link"><Text style={s.secondaryText}>Open GitHub support</Text></Pressable>
     <Text style={s.disclaimer}>Gather Mind is an organisational aid, not a medical device, diagnostic tool, treatment, or substitute for professional care. The source code is Apache-2.0 licensed; that software licence does not grant anyone rights to your personal content.</Text>
     <Pressable style={[s.dangerButton, s.modalDanger]} onPress={onDeleteAll} accessibilityRole="button"><Text style={s.dangerText}>Delete all local data</Text></Pressable>
   </Sheet>;

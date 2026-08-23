@@ -41,6 +41,24 @@ test('local-only Android privacy constraints remain enabled', () => {
   assert.ok(app.android.blockedPermissions.includes('android.permission.INTERNET'));
 });
 
+test('public support routes through GitHub without a personal mail address', () => {
+  const repositoryRoot = path.join(__dirname, '..', '..');
+  const supportFiles = [
+    path.join(repositoryRoot, 'SECURITY.md'),
+    path.join(repositoryRoot, 'docs', 'privacy.html'),
+    path.join(repositoryRoot, 'docs', 'support.html'),
+    path.join(__dirname, '..', 'App.tsx'),
+    path.join(__dirname, '..', 'PRIVACY.md'),
+    path.join(__dirname, '..', 'SUPPORT.md'),
+  ];
+  const supportCopy = supportFiles.map((filename) => fs.readFileSync(filename, 'utf8')).join('\n');
+
+  assert.match(supportCopy, /github\.com\/fezdk\/gather_mind\/issues/);
+  assert.match(supportCopy, /github\.com\/fezdk\/gather_mind\/security\/advisories\/new/);
+  assert.doesNotMatch(supportCopy, /mailto:/i);
+  assert.doesNotMatch(supportCopy, /@gmail\.com/i);
+});
+
 test('secure-device fallback may return from background and complete only when active', () => {
   const base = {
     authenticated: true,

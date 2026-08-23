@@ -30,4 +30,4 @@ All content is held in an encrypted database local to the phone. The widget’s 
 - If every enrolled fingerprint or face was removed, add one again in the phone's settings before opening Gather Mind. The database key is kept separately, so changing biometric enrollment does not delete the data.
 - Clearing app storage or uninstalling removes the only local copy. Android cloud backup is disabled.
 
-For support, email [https://github.com/fezdk/gather_mind/issues](https://github.com/fezdk/gather_mind/issues).
+For support, open an issue in the project's [GitHub issue tracker](https://github.com/fezdk/gather_mind/issues). Do not include private app content or device backups in a public issue.
