@@ -31,11 +31,14 @@ import {
 } from './src/privacy-operations';
 import { scrollOffsetForVisibleInput, visibleViewportBottom } from './src/keyboard-layout';
 import {
-  loadDailyStatusPreference, loadThemeMode, saveDailyStatusEnabled, saveDailyStatusMinutes, saveThemeMode, type ThemeMode,
+  loadDailyStatusPreference, loadThemeMode, loadWidgetDetailsEnabled, saveDailyStatusEnabled, saveDailyStatusMinutes,
+  saveThemeMode, saveWidgetDetailsEnabled, type ThemeMode,
 } from './src/preferences';
 import { DEFAULT_DAILY_STATUS_MINUTES, dateAtLocalMinutes } from './src/daily-status';
 import { editorDraftHasChanges } from './src/editor-changes';
 import { DARK_COLORS, LIGHT_COLORS, type ThemeColors } from './src/theme';
+import { clearWidgetSnapshot, updateWidgetSnapshot } from './src/widget';
+import { parseWidgetRoute, type WidgetRoute } from './src/widget-model';
 
 type Tab = 'today' | 'thoughts' | 'appointments';
 type PickerMode = 'date' | 'time' | null;
@@ -157,6 +160,10 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const dailyStatusMinutesRef = useRef(DEFAULT_DAILY_STATUS_MINUTES);
   const [dailyStatusBusy, setDailyStatusBusy] = useState(false);
   const dailyStatusBusyRef = useRef(false);
+  const [widgetDetailsEnabled, setWidgetDetailsEnabledState] = useState(false);
+  const widgetDetailsEnabledRef = useRef(false);
+  const [widgetSettingBusy, setWidgetSettingBusy] = useState(false);
+  const pendingWidgetRouteRef = useRef<WidgetRoute | null>(null);
   const [appLockEnabled, setAppLockEnabledState] = useState(false);
   const appLockEnabledRef = useRef(false);
   const [appLockDelayMs, setAppLockDelayMsState] = useState<AppLockDelayMs>(0);
@@ -286,6 +293,8 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         dailyStatusEnabledRef.current,
         dailyStatusMinutesRef.current,
       ).catch((error) => console.warn('Could not refresh quiet daily status', error));
+      await updateWidgetSnapshot(hydrated, widgetDetailsEnabledRef.current)
+        .catch((error) => console.warn('Could not refresh the home screen widget', error));
 
       if (!mountedRef.current || generation !== lockGenerationRef.current || lockStatusRef.current !== 'unlocked') return;
       stateRef.current = hydrated;
@@ -294,20 +303,26 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       setNotificationsOn(remindersAreOn);
       setStartupError(null);
       if (editorDraft?.kind === 'thought') {
+        pendingWidgetRouteRef.current = null;
         setEditingThoughtId(editorDraft.itemId);
         setThoughtModal(true);
         setTab('thoughts');
       } else if (editorDraft?.kind === 'task') {
+        pendingWidgetRouteRef.current = null;
         setEditingTaskId(editorDraft.itemId);
         setTaskModal(true);
         setTab('today');
       } else if (editorDraft?.kind === 'appointment') {
+        pendingWidgetRouteRef.current = null;
         setSelectedId(editorDraft.itemId);
         setAppointmentModal(true);
         setTab('appointments');
       } else if (editorDraft?.kind === 'agenda') {
+        pendingWidgetRouteRef.current = null;
         setSelectedId(editorDraft.appointmentId);
         setTab('appointments');
+      } else if (pendingWidgetRouteRef.current && applyWidgetRoute(pendingWidgetRouteRef.current, hydrated)) {
+        // Widget routes take precedence over an older notification response.
       } else if (typeof appointmentId === 'string') {
         setSelectedId(appointmentId);
         setTab('appointments');
@@ -472,10 +487,12 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
 
   async function initialiseApp(): Promise<void> {
     // Read the persisted lock before any fallible startup work so retry can never fail open.
-    const [enabled, delayMs, dailyStatus] = await Promise.all([
+    const [enabled, delayMs, dailyStatus, widgetDetails, initialUrl] = await Promise.all([
       loadAppLockEnabled(),
       loadAppLockDelayMs(),
       loadDailyStatusPreference(DEFAULT_DAILY_STATUS_MINUTES),
+      loadWidgetDetailsEnabled(),
+      Linking.getInitialURL(),
     ]);
     if (!mountedRef.current) return;
     appLockEnabledRef.current = enabled;
@@ -486,6 +503,9 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     setDailyStatusEnabledState(dailyStatus.enabled);
     dailyStatusMinutesRef.current = dailyStatus.minutes;
     setDailyStatusMinutesState(dailyStatus.minutes);
+    widgetDetailsEnabledRef.current = widgetDetails;
+    setWidgetDetailsEnabledState(widgetDetails);
+    if (initialUrl) pendingWidgetRouteRef.current = parseWidgetRoute(initialUrl);
     await configureNotifications();
     if (!mountedRef.current) return;
     if (enabled) {
@@ -515,9 +535,25 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         setTab('today');
       }
     });
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      const route = parseWidgetRoute(url);
+      if (!route) return;
+      pendingWidgetRouteRef.current = route;
+      const current = stateRef.current;
+      if (current && lockStatusRef.current === 'unlocked') {
+        if (editorDraftRef.current) {
+          pendingWidgetRouteRef.current = null;
+          return;
+        }
+        applyWidgetRoute(route, current);
+      } else if (lockStatusRef.current === 'locked') {
+        requestAutomaticUnlock();
+      }
+    });
     return () => {
       mountedRef.current = false;
       subscription.remove();
+      linkingSubscription.remove();
     };
   }, []);
 
@@ -584,7 +620,10 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   function commit(next: AppState): boolean {
     if (deletingAllRef.current) return false;
     const tasksChanged = stateRef.current?.tasks !== next.tasks;
-    const saving = saveState(next).catch((error) => Alert.alert('Could not save', String(error)));
+    void updateWidgetSnapshot(next, widgetDetailsEnabledRef.current)
+      .catch((error) => console.warn('Could not update the home screen widget after a change', error));
+    const saving = saveState(next);
+    void saving.catch((error) => Alert.alert('Could not save', String(error)));
     if (lockStatusRef.current === 'unlocked') {
       stateRef.current = next;
       setState(next);
@@ -600,6 +639,43 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         true,
       ).catch((error) => console.warn('Could not update quiet daily status', error));
     }
+    return true;
+  }
+
+  function applyWidgetRoute(route: WidgetRoute, current: AppState): boolean {
+    pendingWidgetRouteRef.current = null;
+    discardEditorDraft();
+    setThoughtModal(false);
+    setEditingThoughtId(null);
+    setTaskModal(false);
+    setEditingTaskId(null);
+    setAppointmentModal(false);
+    setPendingPostponeId(null);
+    setReminderModal(false);
+    setPrivacyModal(false);
+    if (route.kind === 'appointment') {
+      const appointment = current.appointments.find((item) => item.id === route.id);
+      if (appointment) {
+        setSelectedId(appointment.id);
+        setTab('appointments');
+        return true;
+      }
+    } else if (route.kind === 'goal') {
+      const goal = current.tasks.find((item) => item.id === route.id);
+      if (goal) {
+        setSelectedId(null);
+        setTab('today');
+        openTask(goal);
+        return true;
+      }
+    } else {
+      setSelectedId(null);
+      setTab('today');
+      return true;
+    }
+    setSelectedId(null);
+    setTab('today');
+    flash('That item is no longer available');
     return true;
   }
 
@@ -803,6 +879,22 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     } finally {
       dailyStatusBusyRef.current = false;
       setDailyStatusBusy(false);
+    }
+  }
+
+  async function changeWidgetDetails(enabled: boolean) {
+    if (widgetSettingBusy || enabled === widgetDetailsEnabledRef.current) return;
+    setWidgetSettingBusy(true);
+    try {
+      await saveWidgetDetailsEnabled(enabled);
+      widgetDetailsEnabledRef.current = enabled;
+      setWidgetDetailsEnabledState(enabled);
+      if (stateRef.current) await updateWidgetSnapshot(stateRef.current, enabled);
+      flash(enabled ? 'Widget details are visible' : 'Widget is showing counts only');
+    } catch (error) {
+      Alert.alert('Could not change widget privacy', String(error));
+    } finally {
+      setWidgetSettingBusy(false);
     }
   }
 
@@ -1121,6 +1213,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     if (deletingAllRef.current) return;
     deletingAllRef.current = true;
     let reminderCleanupFailed = false;
+    let widgetCleanupFailed = false;
     try {
       // Let already-started reminder mutations settle, then make cancellation and clearing final.
       await waitForContentMutations();
@@ -1141,6 +1234,12 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         console.warn('Could not finish removing quiet daily status during data deletion', error);
       }
       await clearStoredState();
+      try {
+        await clearWidgetSnapshot();
+      } catch (error) {
+        widgetCleanupFailed = true;
+        console.warn('Could not remove the encrypted home screen widget summary', error);
+      }
       editorDraftRef.current = null;
       editorBaselineRef.current = null;
       const empty = createEmptyState();
@@ -1161,10 +1260,12 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       setAppointmentModal(false);
       setReminderModal(false);
       setPrivacyModal(false);
-      if (reminderCleanupFailed) {
-        Alert.alert('Local data deleted', 'Your Gather Mind content was erased, but Android may still hold a scheduled or delivered reminder. Clear any visible Gather Mind notification, or remove its alarms in Android settings if one appears.');
+      if (reminderCleanupFailed || widgetCleanupFailed) {
+        const reminderWarning = reminderCleanupFailed ? ' Android may still hold a scheduled or delivered reminder; clear any visible Gather Mind notification or alarm.' : '';
+        const widgetWarning = widgetCleanupFailed ? ' The home-screen widget may still show its previous encrypted summary; remove the widget or clear Gather Mind’s app storage.' : '';
+        Alert.alert('Local data deleted', `Your Gather Mind content was erased.${reminderWarning}${widgetWarning}`);
       } else {
-        flash('All local data and scheduled reminders were deleted');
+        flash('All local data, widget details, and reminders were deleted');
       }
     } catch (error) {
       Alert.alert('Could not delete local data', `Gather Mind could not complete the deletion. ${String(error)}`);
@@ -1176,7 +1277,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   function confirmDeleteAllData() {
     Alert.alert(
       'Delete all Gather Mind data?',
-      'This permanently removes every thought, goal, appointment, appointment-plan item, and scheduled reminder from this phone. This cannot be undone.',
+      'This permanently removes every thought, goal, appointment, appointment-plan item, encrypted widget summary, and scheduled reminder from this phone. This cannot be undone.',
       [
         { text: 'Keep my data', style: 'cancel' },
         { text: 'Delete everything', style: 'destructive', onPress: () => void deleteAllData() },
@@ -1254,7 +1355,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     <ThoughtModal visible={thoughtModal} thought={editingThought} thoughts={state.thoughts} appointments={state.appointments} hasGoal={editingThoughtHasGoal} draft={editorDraft?.kind === 'thought' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeThoughtEditor} onSave={saveThought} onTurnIntoGoal={turnThoughtIntoGoal} onDelete={deleteThought} preselectedId={selectedId ?? ''} />
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
-    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
+    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -1846,7 +1947,7 @@ function AppointmentModal({ visible, appointment, baseline, draft, onDraftChange
   </Sheet>;
 }
 
-function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, appLockEnabled, appLockDelayMs, appLockBusy, onClose, onEnable, onThemeModeChange, onDailyStatusChange, onDailyStatusMinutesChange, onAppLockChange, onAppLockDelayChange, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; themeMode: ThemeMode; dailyStatusEnabled: boolean; dailyStatusMinutes: number; dailyStatusBusy: boolean; appLockEnabled: boolean; appLockDelayMs: AppLockDelayMs; appLockBusy: boolean; onClose: () => void; onEnable: () => void; onThemeModeChange: (mode: ThemeMode) => void; onDailyStatusChange: (enabled: boolean) => void; onDailyStatusMinutesChange: (minutes: number) => void; onAppLockChange: (enabled: boolean) => void; onAppLockDelayChange: (delayMs: AppLockDelayMs) => void; onPrivacy: () => void; onDeleteAll: () => void }) {
+function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, widgetDetailsEnabled, widgetSettingBusy, appLockEnabled, appLockDelayMs, appLockBusy, onClose, onEnable, onThemeModeChange, onDailyStatusChange, onDailyStatusMinutesChange, onWidgetDetailsChange, onAppLockChange, onAppLockDelayChange, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; themeMode: ThemeMode; dailyStatusEnabled: boolean; dailyStatusMinutes: number; dailyStatusBusy: boolean; widgetDetailsEnabled: boolean; widgetSettingBusy: boolean; appLockEnabled: boolean; appLockDelayMs: AppLockDelayMs; appLockBusy: boolean; onClose: () => void; onEnable: () => void; onThemeModeChange: (mode: ThemeMode) => void; onDailyStatusChange: (enabled: boolean) => void; onDailyStatusMinutesChange: (minutes: number) => void; onWidgetDetailsChange: (enabled: boolean) => void; onAppLockChange: (enabled: boolean) => void; onAppLockDelayChange: (delayMs: AppLockDelayMs) => void; onPrivacy: () => void; onDeleteAll: () => void }) {
   const { C, s } = useAppTheme();
   const [showDailyStatusTimePicker, setShowDailyStatusTimePicker] = useState(false);
   useEffect(() => { if (!visible || !dailyStatusEnabled) setShowDailyStatusTimePicker(false); }, [visible, dailyStatusEnabled]);
@@ -1855,7 +1956,7 @@ function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyS
     if (event.type === 'dismissed' || !value) return;
     onDailyStatusMinutesChange(value.getHours() * 60 + value.getMinutes());
   }
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.5.9" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.0" title="Settings & privacy">
     <Field heading>Appearance</Field>
     <View style={s.themeChoices}>{THEME_MODE_OPTIONS.map((option) => <Pressable key={option.value} style={[s.themeChoice, themeMode === option.value && s.themeChoiceSelected]} onPress={() => onThemeModeChange(option.value)} accessibilityRole="radio" accessibilityState={{ checked: themeMode === option.value }} accessibilityLabel={`Appearance: ${option.label}`}><Text style={[s.themeChoiceText, themeMode === option.value && s.themeChoiceTextSelected]}>{option.label}</Text></Pressable>)}</View>
     <Text style={s.privacy}>Follow device changes automatically with your phone’s light or dark appearance.</Text>
@@ -1868,6 +1969,9 @@ function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyS
     {dailyStatusEnabled && <View style={s.dailyStatusTimeSetting}><View style={s.flex}><Text style={s.cardTitle}>Show after</Text><Text style={s.small}>The status is refreshed locally when your goals change.</Text></View><Pressable style={[s.dailyStatusTimeButton, dailyStatusBusy && s.disabled]} onPress={() => setShowDailyStatusTimePicker(true)} disabled={dailyStatusBusy} accessibilityRole="button" accessibilityLabel={`Change quiet daily status time, currently ${formatDailyStatusTime(dailyStatusMinutes)}`}><Text style={s.dailyStatusTimeText}>{formatDailyStatusTime(dailyStatusMinutes)}</Text></Pressable></View>}
     {dailyStatusEnabled && showDailyStatusTimePicker && <View style={s.pickerWrap}><DateTimePicker value={dateAtLocalMinutes(localDateKey(), dailyStatusMinutes)} mode="time" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={changeDailyStatusPicker} />{Platform.OS === 'ios' && <Pressable style={s.pickerDoneButton} onPress={() => setShowDailyStatusTimePicker(false)} accessibilityRole="button"><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
     {dailyStatusEnabled && !enabled && <Text style={s.inputHint}>Android notification permission is currently off, so the quiet status cannot appear.</Text>}
+    <Field heading>Home screen</Field>
+    <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Show details in the widget</Text><Text style={s.small}>The compact widget always shows today’s completed/total count. Larger sizes can also show goal titles and your next appointment.</Text></View><Switch style={s.switchControl} value={widgetDetailsEnabled} onValueChange={onWidgetDetailsChange} disabled={widgetSettingBusy} trackColor={{ false: C.line, true: C.sage }} thumbColor={widgetDetailsEnabled ? C.accentSolid : C.white} accessibilityLabel="Show goal and appointment details in the home screen widget" /></View>
+    <Text style={s.privacy}>Long-press an empty area of your Android home screen and choose Widgets → Gather Mind. Details shown there are visible without unlocking Gather Mind; leave this off for counts and times only.</Text>
     <Field heading>Security</Field>
     <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Lock Gather Mind</Text><Text style={s.small}>Ask for strong fingerprint or secure face recognition after you have left the app. Your database is encrypted whether this is on or off.</Text></View><Switch style={s.switchControl} value={appLockEnabled} onValueChange={onAppLockChange} disabled={appLockBusy} trackColor={{ false: C.line, true: C.sage }} thumbColor={appLockEnabled ? C.accentSolid : C.white} accessibilityLabel="Lock Gather Mind with biometrics" /></View>
     {appLockEnabled && <View style={s.lockDelaySetting}>
@@ -1885,14 +1989,14 @@ function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyS
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   const { s } = useAppTheme();
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 21 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind 0.5.9 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 23 August 2026" title="Privacy, data & support">
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind 0.6.0 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
     <Field heading>What the app stores</Field>
-    <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. Its random key is kept in the phone’s secure key store. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. The count never includes goal titles. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
+    <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. Its random key is kept in the phone’s secure key store. The Android home-screen widget receives a bounded summary encrypted separately with Android Keystore. Its default count-and-time mode excludes titles; showing titles requires your explicit choice because home-screen content is visible without Gather Mind’s app lock. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field heading>Permissions</Field>
     <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. You can deny notifications and leave both optional features off.</Text>
     <Field heading>Retention and deletion</Field>
-    <Text style={s.policyText}>Data remains until you delete individual items, use the control below, clear the app’s storage, or uninstall the app. Delete all also cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
+    <Text style={s.policyText}>Data remains until you delete individual items, use the control below, clear the app’s storage, or uninstall the app. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field heading>Support</Field>
     <Text style={s.policyText}>For a reminder problem, check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings. Open and save the appointment again after changing permissions.</Text>
     <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues?subject=Gather%20Mind%20support')} accessibilityRole="link"><Text style={s.secondaryText}>Email https://github.com/fezdk/gather_mind/issues</Text></Pressable>

@@ -1,6 +1,6 @@
 # Gather Mind product direction
 
-Working product notes, not a committed release scope. Last updated 2026-08-22.
+Working product notes, not a committed release scope. Last updated 2026-08-23.
 
 ## Product promise
 
@@ -23,7 +23,7 @@ The app should remain calm, local-first, understandable without setup, and usefu
 
 ## Implementation status
 
-Included through the 0.5.9 source build:
+Included through the 0.6.0 source build:
 
 - Default SQLCipher database encryption with a random 256-bit key in the operating system's secure key store.
 - Copy-first migration from the previous plaintext key-value store, with encrypted read-back verification before the old value is scrubbed.
@@ -40,6 +40,7 @@ Included through the 0.5.9 source build:
 - Optional one-level goal steps through **Make this smaller**, with compact progress on Today and direct step check-off.
 - Automatic parent completion when the last step is checked, protected by Undo.
 - Per-occurrence step progress that survives carry-over and deliberate deferral, resets for each new recurring occurrence, and is restored when a completed weekly or monthly goal is reopened.
+- A responsive Android home-screen widget with completed/total progress at compact sizes, optional goal and appointment context at larger sizes, explicit title privacy, encrypted local summary storage, and app-lock-preserving deep links.
 
 Still queued:
 

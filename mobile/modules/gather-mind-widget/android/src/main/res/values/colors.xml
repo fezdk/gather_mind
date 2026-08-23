@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="gather_mind_widget_surface">#F7F3EA</color>
+  <color name="gather_mind_widget_text">#24362F</color>
+  <color name="gather_mind_widget_muted">#5E6C66</color>
+  <color name="gather_mind_widget_accent">#416555</color>
+  <color name="gather_mind_widget_line">#D8DED9</color>
+</resources>

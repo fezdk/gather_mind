@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.5.9
+# Google Play listing and declarations — Gather Mind 0.6.0
 
 ## Product identity
 
@@ -16,7 +16,7 @@ Build a gentle daily list, optionally break larger goals into smaller checkable 
 
 Add appointments, choose local reminders, and keep questions, decisions, documents, errands, things to bring, and follow-ups together in a readable appointment plan.
 
-Gather Mind works offline. There is no account, advertising, analytics, or cloud backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics.
+Gather Mind works offline. There is no account, advertising, analytics, or cloud backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics. A resizable Android home-screen widget can show today’s count and, only after an explicit privacy choice, goal and appointment context.
 
 Choose a light or dark appearance, or let Gather Mind follow your phone automatically.
 
@@ -27,7 +27,7 @@ Gather Mind is an organisational aid, not a medical device, diagnosis, treatment
 - Ads: No.
 - App access: No account or default restricted area. The optional biometric app lock is off on a fresh installation and has no developer-issued credential.
 - Data safety: No data collected and no data shared. All user content is processed locally on the device, and the Android release does not request Internet access.
-- Account deletion: Not applicable because no account can be created. The in-app **Delete all local data** control erases content and reminders.
+- Account deletion: Not applicable because no account can be created. The in-app **Delete all local data** control erases content, the encrypted widget summary, and reminders.
 - Privacy-policy URL: host the project-level `docs/privacy.html` at a stable public HTTPS URL and enter it in Play Console.
 - Support URL: host the project-level `docs/support.html` at a stable public HTTPS URL.
 - Support email: `https://github.com/fezdk/gather_mind/issues`.

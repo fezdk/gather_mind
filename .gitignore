@@ -9,6 +9,8 @@ mobile/dist/
 # Generated native projects
 mobile/android/
 mobile/ios/
+mobile/modules/*/android/build/
+mobile/modules/*/android/.gradle/
 
 # Build products and local caches
 *.aab
@@ -22,12 +24,18 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+.npmrc
 AGENTS.local.md
+*.key
+*.pem
 *.jks
 *.keystore
 *.p8
 *.p12
+*.pfx
 *.mobileprovision
+credentials*.json
+secrets*.json
 google-services.json
 GoogleService-Info.plist
 service-account*.json

@@ -1,4 +1,4 @@
-# Android release runbook — Gather Mind 0.5.9
+# Android release runbook — Gather Mind 0.6.0
 
 The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first Google Play upload; changing it later creates a different app.
 
@@ -21,6 +21,8 @@ npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
 Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, future one-off planning without a false move count, future first dates plus daily/weekly/monthly recurrence and move limits, move-to-tomorrow confirmation, and **Delete all local data**.
+
+Widget checks must cover launcher discovery, compact and expanded resizing, immediate updates after goal/appointment changes, midnight/date changes, counts-only and opted-in title modes, light/dark system appearance, taps through an enabled app lock, stale deleted-item links, and removal of the encrypted widget summary by **Delete all local data**. Test at least one Pixel-style and one Samsung launcher before release.
 
 For every form with an explicit save action—thought, goal, appointment, and appointment-plan item—change one value and try the close button, Android hardware back, and TalkBack escape. Confirm each route offers to keep editing or discard the unsaved change, while opening and closing an unchanged form does not warn. Confirm existing goal-step edits still save on blur and do not produce a false warning after that save.
 
@@ -60,7 +62,7 @@ Create the production Android App Bundle (`.aab`):
 npm run build:production:android
 ```
 
-The production profile auto-increments the remote Android version code while the user-visible version remains `0.5.9`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
+The production profile auto-increments the remote Android version code while the user-visible version remains `0.6.0`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
 
 ```bash
 npm run submit:android
@@ -70,4 +72,4 @@ Promote from internal testing only after the console declarations, privacy/suppo
 
 ## iOS preparation
 
-The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.5.9.
+The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.6.0.

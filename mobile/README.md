@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.5.9
+# Gather Mind mobile 0.6.0
 
 This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required.
 
@@ -27,6 +27,14 @@ The Today screen also includes a daily goal list:
 The **Thoughts** screen is a searchable list first. Its optional connection view explains matches through shared themes, meaningful words, or appointment links. Thought capture can suggest up to three appointments from the previous 7 days or next 30 days; suggestions are calculated on-device and nothing is linked until it is selected. A saved thought can become a one-off goal for today while the original remains available; opening that goal provides a link back to its source thought.
 
 Today deliberately does not repeat a partial thought list. Its capture action remains immediately available, while all saved thoughts live in the searchable Thoughts screen or inside a linked appointment.
+
+## Android home-screen widget
+
+- Long-press an empty area of the Android home screen, choose **Widgets → Gather Mind**, and resize the same responsive widget to the amount of context wanted.
+- A compact widget shows today’s completed/total goal count. At larger sizes it also shows remaining-goal context and the next appointment.
+- Goal and appointment titles are excluded by default. Enable **Settings & privacy → Home screen → Show details in the widget** only if that content may be visible on the unlocked home screen.
+- Tapping the widget opens Today; tapping a visible goal or appointment opens that item after the normal app-lock flow.
+- The app writes a bounded summary after a successful local save. The summary is encrypted separately with Android Keystore, refreshed at date changes and by Android’s periodic widget update, and removed by **Delete all local data**.
 
 ## Appearance
 

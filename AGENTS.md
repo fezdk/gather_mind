@@ -1,12 +1,6 @@
 # Gather Mind agent guide
 
-This file applies to the whole repository. The canonical project directory is:
-
-```text
-/home/nezar/projects/gather_mind
-```
-
-Start future Codex sessions from that directory. The earlier Codex workspace path under `/home/nezar/Documents/Codex/` is stale and may not exist or be writable.
+This file applies to the whole repository. Start agent sessions from the repository root.
 
 After reading this file, read `AGENTS.local.md` completely if it exists in the repository root. It is intentionally gitignored and may contain machine-local operational details. Never commit that file or copy local credentials or private distribution configuration from it into tracked documentation.
 
@@ -24,50 +18,30 @@ After reading this file, read `AGENTS.local.md` completely if it exists in the r
 - Android phone/portrait is the current target. Tablet support is deliberately off; iOS is prepared but not currently shipped.
 - Preserve user changes in a dirty worktree. Do not edit or commit generated native projects, APKs, AABs, keystores, service-account files, or other ignored credentials/artifacts.
 
-## Toolchain on this machine
+## Toolchain
 
-The system `node` is v18.19.1, which is too old for Expo 54. It fails during export/prebuild with errors such as `configs.toReversed is not a function`. The project requires Node `>=20.19.4 <25`.
-
-A known-working Node v24.3.0 binary is cached at:
-
-```text
-/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin/node
-```
-
-If that npm cache is gone, recreate/use it with `npx --yes node@24.3.0`. For commands whose scripts find `node` through `PATH`, put this directory first:
-
-```bash
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm ci
-```
-
-Known-working Android toolchain paths:
-
-```text
-JDK 17:       /home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2
-Android SDK:  /home/nezar/Android/Sdk
-Build tools:  /home/nezar/Android/Sdk/build-tools/36.0.0
-```
+The project requires Node `>=20.19.4 <25`; Node 24.3.0, JDK 17, Android SDK 36, and build tools 36.0.0 are known to work. Older Node versions fail during Expo export/prebuild with errors such as `configs.toReversed is not a function`. Keep `JAVA_HOME` and `ANDROID_HOME` pointed at the selected JDK and SDK. Machine-specific binary paths belong in the gitignored `AGENTS.local.md`, never in this tracked guide.
 
 The local release build currently resolves to min SDK 24 and target SDK 36.
 
 ## Development and verification
 
-From `mobile/`, install dependencies and start Metro with Node 24 first on `PATH`:
+From `mobile/`, install dependencies and start Metro with a supported Node version:
 
 ```bash
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm ci
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm start
+npm ci
+npm start
 ```
 
 Run all meaningful mobile checks before a build:
 
 ```bash
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm run check
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm test
-/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin/node node_modules/expo/bin/cli export --platform android --output-dir /tmp/gather-mind-release-check
+npm run check
+npm test
+npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
-The repository-root `npm test` currently discovers no substantive tests; the useful suite is `mobile/test/*.test.cjs`.
+The repository-root `npm test` discovers both the web-prototype tests and `mobile/test/*.test.cjs`; use `npm --prefix mobile test` when only the native app is in scope.
 
 Physical-device release checks should cover:
 
@@ -84,6 +58,7 @@ Physical-device release checks should cover:
 - biometric app-lock enable/disable, automatic foreground prompt without cancellation loops, manual retry, background locking, notification entry, and biometric removal/re-enrollment;
 - TalkBack and Switch Access navigation for every flow, including the custom move-to-tomorrow action and Undo announcement;
 - Android font size at 200%, reduced motion, and Accessibility Scanner in light and dark appearance, including every sheet with the keyboard open.
+- home-screen widget discovery and resizing on at least Pixel and Samsung launchers; compact/expanded layouts, light/dark system appearance, counts-only/detail privacy, date rollover, deep links through app lock, and Delete all widget cleanup.
 
 ## Versioning a release
 
@@ -97,7 +72,7 @@ Do not infer the next version from this document; inspect Git tags and current f
 - the hard-coded visible version in the Settings/privacy copy in `mobile/App.tsx`;
 - `README.md`, `CHANGELOG.md`, `mobile/RELEASE.md`, and store/support/privacy copy where applicable.
 
-Use patch releases for the current beta stream. Do not change `dk.fez.gathermind` after store registration.
+Use semantic versioning and inspect the existing release history before selecting a version. Do not change `dk.fez.gathermind` after store registration.
 
 ## Reproducible local Android APK build
 
@@ -110,7 +85,7 @@ Use this exact order for every local sideload APK. Do not reuse an older `app-re
 5. Generate a clean Android native project from `mobile/`:
 
 ```bash
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node_modules/.bin/expo prebuild --platform android --no-install --clean
+npx expo prebuild --platform android --no-install --clean
 ```
 
 6. Expo prebuild has changed the `android` and `ios` package scripts to `expo run:*` in prior runs. Restore the intended Metro scripts immediately afterward and verify that the package diff contains no new prebuild side effects:
@@ -125,7 +100,7 @@ The `git diff` command above is run from the repository root; use `git diff -- p
 7. Build from `mobile/android/`:
 
 ```bash
-JAVA_HOME=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2 ANDROID_HOME=/home/nezar/Android/Sdk PATH=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2/bin:/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/home/nezar/Android/Sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease
 ```
 
 The output is:
@@ -143,9 +118,9 @@ mobile/android/app/build/outputs/apk/release/app-release.apk
 Use the installed SDK tools, not similarly named system tools:
 
 ```bash
-/home/nezar/Android/Sdk/build-tools/36.0.0/aapt dump badging releases/Gather-Mind-X.Y.Z.apk
-/home/nezar/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs releases/Gather-Mind-X.Y.Z.apk
-/home/nezar/Android/Sdk/build-tools/36.0.0/zipalign -c -v 4 releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -v 4 releases/Gather-Mind-X.Y.Z.apk
 sha256sum releases/Gather-Mind-X.Y.Z.apk
 ```
 
@@ -186,17 +161,13 @@ Keep the production keystore and Play service-account JSON in EAS or a secure cr
 
 ## Git and GitHub release specifics
 
-The private repository is:
+The public repository is:
 
 ```text
 https://github.com/fezdk/gather_mind
 ```
 
-The authenticated GitHub account is `fezdk`. `gh` is the snap binary at `/snap/bin/gh`; its confinement may require running GitHub/network operations outside a restricted sandbox. The remote is HTTPS. If ordinary Git credential lookup fails, this has worked:
-
-```bash
-git -c credential.helper='!gh auth git-credential' push origin main
-```
+Keep authenticated account details and machine-specific Git credential commands in `AGENTS.local.md`.
 
 After tests, source commit, and tag, publish a headless-downloadable release asset with a command shaped like:
 
@@ -204,6 +175,6 @@ After tests, source commit, and tag, publish a headless-downloadable release ass
 gh release create vX.Y.Z releases/Gather-Mind-X.Y.Z.apk --title "Gather Mind X.Y.Z" --notes-file /tmp/gather-mind-release-notes.md
 ```
 
-Then verify the release and asset digest with `gh release view`. Because the repository is private, direct APK links require signing into GitHub as an authorized user.
+Then verify the release and asset digest with `gh release view`. Public release assets must be downloadable without a GitHub account.
 
 Do not push, tag, publish, email, or upload a build unless the user's request includes that external action. Building and verifying locally does not itself authorize distribution.

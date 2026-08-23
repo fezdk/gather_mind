@@ -1,6 +1,6 @@
 {
   "name": "gather-mind-mobile",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "main": "index.ts",
   "license": "Apache-2.0",
   "engines": {
@@ -11,6 +11,7 @@
     "expo": "54.0.37",
     "expo-crypto": "~15.0.9",
     "expo-local-authentication": "~17.0.9",
+    "expo-modules-core": "3.0.30",
     "expo-notifications": "~0.32.17",
     "expo-secure-store": "~15.0.8",
     "expo-sqlite": "~16.0.10",

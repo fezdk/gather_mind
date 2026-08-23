@@ -4,6 +4,11 @@ All notable Gather Mind changes are documented here.
 
 ## Unreleased
 
+## 0.6.0 — 2026-08-23
+
+- Added one responsive Android home-screen widget: compact sizes show today’s completed/total goal count, larger sizes add calm goal and appointment context, and taps return to the matching in-app view through the existing biometric lock.
+- Refreshed every placed widget instance immediately after goal changes through an observed Glance revision, and added a one-row wide layout that shows both goal context and the next appointment.
+- Kept widget titles private by default, added an explicit Settings opt-in for details visible on the home screen, and encrypted the bounded widget summary separately with Android Keystore while preserving the no-Internet model.
 - Fixed Android hardware back, the close button, and accessibility escape in the goal editor so native event objects cannot be mistaken for an editor-transition callback and crash the app; audited and hardened the remaining sheet and native-event close paths against the same failure mode.
 - Warned before closing thought, goal, appointment, or appointment-plan forms with material unsaved changes, while allowing unchanged forms and already auto-saved goal steps to close normally.
 - Restored the visible **↶ Today** affordance for bringing a deliberately postponed goal back, and restored clear outlines around Today and per-goal step progress bars.
@@ -16,7 +21,7 @@ All notable Gather Mind changes are documented here.
 - Moved the goal-step disclosure arrow below the parent summary and the collapse arrow below the full expanded list.
 - Saved step edits and explicit removals directly to an existing goal when a field loses focus, without also committing unfinished title, schedule, or recurrence edits.
 
-## 0.5.9 — 2026-08-22
+## 0.5.9 — 2026-08-22 (internal beta)
 
 - Added optional one-level goal steps through **Make this smaller**, with compact progress and the next unfinished step available directly from Today.
 - Made checking the last goal step complete its parent goal automatically with Undo, while completing the parent directly leaves individual step history honest.

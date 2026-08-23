@@ -1,8 +1,8 @@
 # Gather Mind
 
-Current source build: **0.5.9** · Application ID: `dk.fez.gathermind` · Latest published GitHub release: [v0.5.8](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8)
+Current source build: **0.6.0** · Application ID: `dk.fez.gathermind` · Latest Android beta: [v0.6.0](https://github.com/fezdk/gather_mind/releases/tag/v0.6.0)
 
-Gather Mind is a calm, local-first Android app for catching thoughts, planning appointments, and choosing manageable goals when cognitive load is high. It is informed by needs associated with AuDHD and menopause-related brain fog without making medical claims or attempting diagnosis.
+Gather Mind is a calm, local-first Android app for anyone who wants a quieter way to catch thoughts, plan appointments, and choose manageable goals when life feels mentally crowded. It supports everyday cognitive overload, changing energy, brain fog, and executive-function challenges without making medical claims or attempting diagnosis.
 
 Everything entered in the native app stays on the phone. There is no account, backend, advertising, analytics, cloud sync, or Android Internet permission.
 
@@ -33,6 +33,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Preserve step progress while an occurrence is carried over or moved, then reset it for each new daily, weekly, or monthly occurrence.
 - See future goals under quieter Tomorrow and **Scheduled ahead** sections until their planned day.
 - Optionally show a silent notification-list count of unfinished goals at a configurable time. It is off by default and never includes goal titles.
+- Add a responsive Android home-screen widget: compact sizes show today’s completed/total count, while larger sizes add open-goal and next-appointment context. Titles are off by default and require an explicit privacy opt-in.
 
 ### Appointments
 
@@ -51,10 +52,11 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Support TalkBack with named controls, form labels, selection and checkbox states, modal focus, live Undo/result announcements, and a non-gesture move-to-tomorrow action.
 - Keep interactive targets at least 48 dp, preserve 4.5:1 normal-text contrast on shared surfaces and move colours, follow reduced-motion settings, and replace the geometric thought map at large font sizes.
 - Disable Android cloud backup and provide an in-app control that deletes all local content and cancels scheduled notifications.
+- Keep the widget’s bounded local summary encrypted separately with Android Keystore and remove it with **Delete all local data**; the widget adds no account, network request, or Internet permission.
 
 ## Install the Android beta
 
-Download `Gather-Mind-0.5.8.apk` from the [v0.5.8 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.5.8). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
+Download `Gather-Mind-0.6.0.apk` from the [v0.6.0 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.0). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
 
 The beta certificate is not the future Google Play production credential. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for the local APK and EAS/Play release paths.
 
@@ -78,22 +80,22 @@ npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 
 ### Build a verified local Android APK
 
-The canonical development machine uses Node 24.3.0, JDK 17, Android SDK 36, and the existing sideload-beta signing lineage. Follow this sequence for every local APK so the generated native project, artifact naming, and verification are consistent:
+Use Node 24, JDK 17, and Android SDK/build tools 36. Keep `JAVA_HOME` and `ANDROID_HOME` pointed at those installations. Follow this sequence for every local APK so the generated native project, artifact naming, and verification are consistent:
 
 1. Confirm the intended version is synchronized across both `package.json` files, `mobile/app.json`, the visible Settings version, and the release documentation. Android `versionCode` and iOS `buildNumber` must increase for a new release.
-2. From `mobile/`, run the checks and export with the known-working Node version:
+2. From `mobile/`, run the checks and export:
 
 ```bash
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm run check
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin npm test
-/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin/node node_modules/expo/bin/cli export --platform android --output-dir /tmp/gather-mind-release-check
+npm run check
+npm test
+npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
 3. Run `git diff --check` from the repository root. Then confirm the ignored `mobile/android/` tree contains no user-authored work before replacing it with a clean Expo prebuild:
 
 ```bash
 cd mobile
-PATH=/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node_modules/.bin/expo prebuild --platform android --no-install --clean
+npx expo prebuild --platform android --no-install --clean
 npm pkg set "scripts.android=expo start --android" "scripts.ios=expo start --ios"
 cd ..
 git diff -- mobile/package.json mobile/package-lock.json
@@ -105,7 +107,7 @@ The package diff must contain only the already-intended source changes; Expo mus
 
 ```bash
 cd mobile/android
-JAVA_HOME=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2 ANDROID_HOME=/home/nezar/Android/Sdk PATH=/home/nezar/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2/bin:/home/nezar/.npm/_npx/ca19112bc3bc2ce4/node_modules/node/bin:/home/nezar/Android/Sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease
 cd ../..
 cp mobile/android/app/build/outputs/apk/release/app-release.apk releases/Gather-Mind-X.Y.Z.apk
 ```
@@ -115,13 +117,13 @@ Replace `X.Y.Z` with the verified version. The generated native directory and AP
 5. Inspect the copied artifact with the installed Android SDK tools:
 
 ```bash
-/home/nezar/Android/Sdk/build-tools/36.0.0/aapt dump badging releases/Gather-Mind-X.Y.Z.apk
-/home/nezar/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs releases/Gather-Mind-X.Y.Z.apk
-/home/nezar/Android/Sdk/build-tools/36.0.0/zipalign -c -v 4 releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs releases/Gather-Mind-X.Y.Z.apk
+"$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -v 4 releases/Gather-Mind-X.Y.Z.apk
 sha256sum releases/Gather-Mind-X.Y.Z.apk
 ```
 
-Verify package `dk.fez.gathermind`, the intended version name/code, min SDK 24, target SDK 36, APK Signature Scheme v2, successful alignment, and beta certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Report the APK checksum with the handoff. Distribution is deliberately not prescribed here; APK upload configuration belongs in each developer's private local tooling.
+Verify package `dk.fez.gathermind`, the intended version name/code, min SDK 24, target SDK 36, APK Signature Scheme v2, and successful alignment. The APK published by this project uses beta certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`; a clone built with another local signing key will correctly have a different signer. Report the APK checksum with the handoff. Distribution is deliberately not prescribed here; APK upload configuration belongs in each developer's private local tooling.
 
 The authoritative agent workflow and complete physical-device QA list are in [`AGENTS.md`](AGENTS.md). More mobile behavior and reminder-testing guidance live in [`mobile/README.md`](mobile/README.md).
 
@@ -133,12 +135,12 @@ The root command serves only the static prototype on port 4173:
 npm start
 ```
 
-Open `http://localhost:4173`. Its data uses browser-local storage, and browser alarms are not dependable while it is closed. The repository-root `npm test` has no substantive mobile coverage.
+Open `http://localhost:4173`. Its data uses browser-local storage, and browser alarms are not dependable while it is closed. The repository-root `npm test` runs both prototype and mobile tests; use `npm --prefix mobile test` for the native-only suite.
 
 ## Current limitations and direction
 
 - There is no backup, export/import, recovery password, account, or sync. Clearing app storage or uninstalling removes the only copy.
-- Real notification delivery, biometric behavior, encrypted migration, keyboard avoidance, and update-in-place behavior still require physical Android QA for each release.
+- Real notification delivery, biometric behavior, encrypted migration, keyboard avoidance, launcher-widget sizing/deep links, and update-in-place behavior still require physical Android QA for each release.
 - Thought-to-appointment-plan conversion, handled/archive state, thread-like grouping, and encrypted export/import remain planned rather than shipped.
 - Cloud AI, automatic appointment assignment, recursive thought hierarchies, gamification, analytics, and server backup are deliberately not current scope.
 
@@ -146,4 +148,4 @@ The working product rationale and queued ideas are documented in [`docs/product-
 
 ## Licence, privacy, and support
 
-Gather Mind is licensed under the [Apache License 2.0](LICENSE). The publishable [privacy policy](docs/privacy.html), [support page](docs/support.html), and [Google Play disclosure draft](mobile/store/google-play.md) describe the current local-only behavior.
+Gather Mind is licensed under the [Apache License 2.0](LICENSE). The publishable [privacy policy](docs/privacy.html), [support page](docs/support.html), [security reporting policy](SECURITY.md), and [Google Play disclosure draft](mobile/store/google-play.md) describe the current local-only behavior.

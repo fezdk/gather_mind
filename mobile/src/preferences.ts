@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 const THEME_MODE_SETTING = 'gather-mind-theme-mode-v1';
 const DAILY_STATUS_ENABLED_SETTING = 'gather-mind-daily-status-enabled-v1';
 const DAILY_STATUS_MINUTES_SETTING = 'gather-mind-daily-status-minutes-v1';
+const WIDGET_DETAILS_SETTING = 'gather-mind-widget-details-enabled-v1';
 const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
@@ -45,4 +46,12 @@ export async function saveDailyStatusEnabled(enabled: boolean): Promise<void> {
 export async function saveDailyStatusMinutes(minutes: number): Promise<void> {
   if (!Number.isInteger(minutes) || minutes < 0 || minutes >= 24 * 60) throw new Error('Unsupported daily status time.');
   await SecureStore.setItemAsync(DAILY_STATUS_MINUTES_SETTING, String(minutes), SECURE_STORE_OPTIONS);
+}
+
+export async function loadWidgetDetailsEnabled(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(WIDGET_DETAILS_SETTING, SECURE_STORE_OPTIONS)) === 'true';
+}
+
+export async function saveWidgetDetailsEnabled(enabled: boolean): Promise<void> {
+  await SecureStore.setItemAsync(WIDGET_DETAILS_SETTING, String(enabled), SECURE_STORE_OPTIONS);
 }

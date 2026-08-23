@@ -1,8 +1,12 @@
 # Gather Mind support
 
-Gather Mind 0.5.9 is an Android-first beta. It works offline and does not require an account or backend.
+Gather Mind 0.6.0 is an Android-first beta. It works offline and does not require an account or backend.
 
 The app follows the phone's light or dark appearance by default. Choose a fixed mode under **Settings & privacy → Appearance** if preferred; the choice is stored locally on the phone.
+
+## Home-screen widget
+
+Long-press an empty area of the Android home screen and choose **Widgets → Gather Mind**. Resize the widget to switch between the compact completed/total count and the larger contextual layout. If it has not refreshed yet, open Gather Mind once. Goal and appointment titles are hidden by default; enable them under **Settings & privacy → Home screen** only when they may safely be visible without unlocking the app.
 
 ## Reminder troubleshooting
 
@@ -16,7 +20,7 @@ The app follows the phone's light or dark appearance by default. Choose a fixed 
 
 ## Data and deletion
 
-All content is held in an encrypted database local to the phone. There is no server copy or recovery password. **Delete all local data** permanently removes all content and cancels scheduled Gather Mind reminders.
+All content is held in an encrypted database local to the phone. The widget’s bounded summary is encrypted separately with Android Keystore. There is no server copy or recovery password. **Delete all local data** permanently removes all content, the widget summary, and scheduled Gather Mind reminders.
 
 ## App lock troubleshooting
 
