@@ -30,6 +30,7 @@ const {
   tasksForToday,
   tasksForTomorrow,
   tasksScheduledAhead,
+  thoughtsWithTag,
   toggleTaskCompletion,
   toggleTaskStep,
   unlinkedThoughts,
@@ -439,6 +440,18 @@ test('thought search matches themes and ignores accents and case', () => {
 
   assert.deepEqual(searchThoughts(thoughts, 'SØVN').map((item) => item.id), ['doctor']);
   assert.deepEqual(searchThoughts(thoughts, 'cafe').map((item) => item.id), ['coffee']);
+});
+
+test('saved-theme filtering matches the complete tag instead of its individual words', () => {
+  const thoughts = [
+    thought('multi-word', 'Recover after meeting people', ['Me social']),
+    thought('single-word', 'Plan a party', ['social']),
+    thought('text-only', 'Reflect on me social situations', ['reflection']),
+  ];
+
+  assert.deepEqual(thoughtsWithTag(thoughts, 'me social').map((item) => item.id), ['multi-word']);
+  assert.deepEqual(thoughtsWithTag(thoughts, 'ME SOCIAL').map((item) => item.id), ['multi-word']);
+  assert.deepEqual(thoughtsWithTag(thoughts, 'social').map((item) => item.id), ['single-word']);
 });
 
 test('thought relations rank shared themes and expose the local matching reason', () => {

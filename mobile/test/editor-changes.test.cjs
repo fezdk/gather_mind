@@ -71,3 +71,9 @@ test('native sheet events cannot be interpreted as goal-editor transition callba
   assert.doesNotMatch(appSource, /onAccessibilityEscape=\{onClose\}/);
   assert.doesNotMatch(appSource, /style=\{s\.close\} onPress=\{onClose\}/);
 });
+
+test('the goal-step prompt explains the concrete Today behavior', () => {
+  assert.match(appSource, />Split into smaller steps</);
+  assert.match(appSource, /add checkable steps inside this goal/);
+  assert.match(appSource, /They appear under the goal on Today/);
+});

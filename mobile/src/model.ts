@@ -175,6 +175,14 @@ export function searchThoughts(thoughts: Thought[], query: string) {
     .map(({ thought }) => thought);
 }
 
+export function thoughtsWithTag(thoughts: Thought[], tag: string) {
+  const normalizedTag = normalizeTag(tag);
+  if (!normalizedTag) return [];
+  return thoughts
+    .filter((thought) => thought.tags.some((candidate) => normalizeTag(candidate) === normalizedTag))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
 export type ThoughtRelation = {
   thought: Thought;
   sharedTags: string[];

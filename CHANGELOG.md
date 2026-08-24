@@ -6,6 +6,9 @@ All notable Gather Mind changes are documented here.
 
 ## 0.6.0 — 2026-08-23
 
+- Unified the Today and Thoughts creation actions with compact green **Goal +**, **Appointment +**, and **Thought +** buttons, moved thought creation above search, and added a visible search icon.
+- Made saved-theme chips filter by the complete theme name, so a multi-word theme such as `me social` no longer includes thoughts tagged only `social`.
+- Renamed **Make this smaller** to **Split into smaller steps** and clarified that it adds a checkable list inside the goal which appears on Today and completes the goal at the final step.
 - Moved public support to GitHub Issues and enabled private GitHub vulnerability reports so no personal support address needs to be published in the app or repository.
 - Added one responsive Android home-screen widget: compact sizes show today’s completed/total goal count, larger sizes add calm goal and appointment context, and taps return to the matching in-app view through the existing biometric lock.
 - Refreshed every placed widget instance immediately after goal changes through an observed Glance revision, and added a one-row wide layout that shows both goal context and the next appointment.
