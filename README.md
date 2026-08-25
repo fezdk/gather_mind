@@ -1,6 +1,6 @@
 # Gather Mind
 
-Current source build: **0.6.0** · Application ID: `dk.fez.gathermind` · Latest Android beta: [v0.6.0](https://github.com/fezdk/gather_mind/releases/tag/v0.6.0)
+Current source build: **0.6.1** · Application ID: `dk.fez.gathermind` · Latest Android beta: [v0.6.1](https://github.com/fezdk/gather_mind/releases/tag/v0.6.1)
 
 Gather Mind is a calm, local-first Android app for anyone who wants a quieter way to catch thoughts, plan appointments, and choose manageable goals when life feels mentally crowded. It supports everyday cognitive overload, changing energy, brain fog, and executive-function challenges without making medical claims or attempting diagnosis.
 
@@ -42,6 +42,16 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Schedule reminders through the phone's operating system and open the relevant appointment when a reminder is tapped.
 - Reconcile missing future reminders locally when the app starts.
 
+### Optional Health
+
+- Enable **Health tracking** explicitly in Settings to add the private Health tab; fresh installations keep it off until chosen.
+- Record a simple 1–5 mood and sleep-quality check-in for each day without creating an account or granting a health permission.
+- If useful, enable the separate **Cycle tracking** switch inside Health settings. Mood and sleep remain available without it.
+- Log a period's first day and optional last day, review start/end history and recorded duration, or remove entries individually.
+- After two useful period starts, calculate a deliberately simple local estimate and recent timing variation from start-to-start intervals rather than assuming a fixed 28-day cycle. Completed start/end entries also show typical recorded period length.
+- Optionally show a Today note during the five days before that estimate. The estimate is informational only and must not be used for contraception, diagnosis, treatment, or medical decisions.
+- Keep all health entries inside the same SQLCipher-encrypted on-device database; they are excluded from widgets and notifications.
+
 ### Privacy, security, and comfort
 
 - Store content in a SQLCipher-encrypted SQLite database with a random 256-bit key held separately in Expo SecureStore.
@@ -56,7 +66,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 
 ## Install the Android beta
 
-Download `Gather-Mind-0.6.0.apk` from the [v0.6.0 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.0). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
+Download `Gather-Mind-0.6.1.apk` from the [v0.6.1 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.1). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
 
 The beta certificate is not the future Google Play production credential. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for the local APK and EAS/Play release paths.
 
@@ -142,6 +152,7 @@ Open `http://localhost:4173`. Its data uses browser-local storage, and browser a
 - There is no backup, export/import, recovery password, account, or sync. Clearing app storage or uninstalling removes the only copy.
 - Real notification delivery, biometric behavior, encrypted migration, keyboard avoidance, launcher-widget sizing/deep links, and update-in-place behavior still require physical Android QA for each release.
 - Thought-to-appointment-plan conversion, handled/archive state, thread-like grouping, and encrypted export/import remain planned rather than shipped.
+- Cycle timing is a simple estimate from manually entered starts, not a fertility prediction or medical assessment; irregular or missing entries can make it inaccurate.
 - Cloud AI, automatic appointment assignment, recursive thought hierarchies, gamification, analytics, and server backup are deliberately not current scope.
 
 The working product rationale and queued ideas are documented in [`docs/product-direction.md`](docs/product-direction.md). Gather Mind intentionally uses neutral language: items stay open rather than becoming overdue, capture can be messy, and there are no streaks or red failure badges.

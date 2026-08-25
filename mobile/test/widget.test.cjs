@@ -23,6 +23,10 @@ test('widget snapshots contain a bounded local summary and hide titles by defaul
   const open = createTask('Call the clinic', 'once', today, now);
   const completed = { ...createTask('Take medicine', 'daily', today, now), completedOn: today };
   state.tasks.push(open, completed);
+  state.health.enabled = true;
+  state.health.cycleTrackingEnabled = true;
+  state.health.checkIns.push({ date: today, mood: 1, sleep: 5 });
+  state.health.periods.push({ start: '2026-08-01', end: '2026-08-05' });
   state.appointments.push(
     { id: 'past', title: 'Past appointment', startsAt: '2026-08-23T09:00:00.000Z' },
     { id: 'next', title: 'Dentist', startsAt: '2026-08-23T14:30:00.000Z' },
@@ -34,10 +38,14 @@ test('widget snapshots contain a bounded local summary and hide titles by defaul
   assert.deepEqual(privateSnapshot.appointments, [{ id: 'next', title: '', startsAt: Date.parse('2026-08-23T14:30:00.000Z') }]);
   assert.equal(JSON.stringify(privateSnapshot).includes('Call the clinic'), false);
   assert.equal(JSON.stringify(privateSnapshot).includes('Dentist'), false);
+  assert.equal(Object.hasOwn(privateSnapshot, 'health'), false);
+  assert.equal(JSON.stringify(privateSnapshot).includes('checkIns'), false);
+  assert.equal(JSON.stringify(privateSnapshot).includes('periods'), false);
 
   const detailedSnapshot = buildWidgetSnapshot(state, true, now);
   assert.deepEqual(detailedSnapshot.days[0].goals, [{ id: open.id, title: 'Call the clinic' }]);
   assert.equal(detailedSnapshot.appointments[0].title, 'Dentist');
+  assert.equal(Object.hasOwn(detailedSnapshot, 'health'), false);
   assert.equal(detailedSnapshot.days.at(-1).date, dateKeyAfter(today, WIDGET_SNAPSHOT_DAYS - 1));
 });
 

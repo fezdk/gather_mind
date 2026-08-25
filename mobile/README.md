@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.6.0
+# Gather Mind mobile 0.6.1
 
 This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required.
 
@@ -27,6 +27,16 @@ The Today screen also includes a daily goal list:
 The **Thoughts** screen is a searchable list first. Its optional connection view explains matches through shared themes, meaningful words, or appointment links. Thought capture can suggest up to three appointments from the previous 7 days or next 30 days; suggestions are calculated on-device and nothing is linked until it is selected. A saved thought can become a one-off goal for today while the original remains available; opening that goal provides a link back to its source thought.
 
 Today deliberately does not repeat a partial thought list. Its capture action remains immediately available, while all saved thoughts live in the searchable Thoughts screen or inside a linked appointment.
+
+## Optional Health tab
+
+- **Settings & privacy → Health tracking** is off by default. Enabling it adds Health to the bottom navigation for mood and sleep check-ins; disabling it hides the tab while retaining encrypted entries.
+- Mood and sleep quality use independent 1–5 choices for the current local day and save immediately. Tapping a selected choice again clears it.
+- A second **Cycle tracking** switch appears only after Health is enabled. It reveals period history and Today estimates without being required for the general Health tracker. Hiding it retains encrypted cycle entries.
+- A period has a user-selected first day and optional last day. Start/end history shows recorded duration and can be edited or removed individually; **Clear health history** removes all mood, sleep, and period entries without changing either switch.
+- An estimate requires at least two usefully spaced starts. It uses the median of up to six recent start-to-start intervals, reports recent variation without labelling it normal or abnormal, and never predicts fertility or ovulation. Completed start/end entries provide a separate typical recorded period length.
+- Today shows the estimate only from five days before through the estimated date. The app clearly states that cycle timing is not contraception, diagnosis, treatment, or a basis for medical decisions.
+- Health entries stay in the encrypted app database and are never copied to the widget, notifications, analytics, a backend, or network traffic. No Android health permission or Internet permission is requested.
 
 ## Android home-screen widget
 

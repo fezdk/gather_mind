@@ -1,4 +1,4 @@
-# Android release runbook — Gather Mind 0.6.0
+# Android release runbook — Gather Mind 0.6.1
 
 The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first Google Play upload; changing it later creates a different app.
 
@@ -29,6 +29,8 @@ For every form with an explicit save action—thought, goal, appointment, and ap
 Quiet-status checks should cover its default-off state, permission denial, enabling, changing its time to a few minutes ahead, delivery without sound/vibration/banner while the app is closed, correct singular/plural counts, no notification when all goals are complete, immediate removal/update after a goal changes, carry-over labels after midnight, tapping through the optional app lock to Today, disabling the setting, and verifying that no goal title appears on the lock screen.
 
 Appearance checks should cover Follow device while the system changes between light and dark, both manual overrides, restart persistence, the biometric lock/privacy cover, every tab and sheet, focused keyboard inputs, date/time pickers, status/navigation bars, and readable distress colours.
+
+Health checks should start by updating an existing installation and confirming the saved opt-in state migrates correctly and no navigation item appears when Health is off. Enable general Health, log and clear each mood/sleep rating, then enable cycle tracking separately. Add and remove past and current period starts, add/edit/clear valid end dates, reject future, pre-start, and next-period-overlapping ends, confirm restart persistence, and verify duration, variation, estimate, and Today-card boundary dates. Disable and re-enable each switch to confirm hiding does not delete encrypted history, then use **Clear health history** and **Delete all local data** separately. Confirm no health value appears in widgets or notifications. Read every disclaimer and exercise the Health tab at 200% font in light/dark mode with TalkBack and Switch Access.
 
 Accessibility checks should use a physical Android phone and cover:
 
@@ -62,14 +64,14 @@ Create the production Android App Bundle (`.aab`):
 npm run build:production:android
 ```
 
-The production profile auto-increments the remote Android version code while the user-visible version remains `0.6.0`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
+The production profile auto-increments the remote Android version code while the user-visible version remains `0.6.1`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
 
 ```bash
 npm run submit:android
 ```
 
-Promote from internal testing only after the console declarations, privacy/support URLs, screenshots, content rating, exact-alarm review, and health-app declaration are complete.
+Promote from internal testing only after the console declarations, privacy/support URLs, screenshots, content rating, exact-alarm review, and health-app declaration are complete. Declare the optional features as **Period Tracking** and **Sleep Management** and keep the non-medical disclaimer in the listing and in-app Health screen.
 
 ## iOS preparation
 
-The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.6.0.
+The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.6.1.

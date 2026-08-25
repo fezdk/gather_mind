@@ -1,8 +1,14 @@
 # Gather Mind support
 
-Gather Mind 0.6.0 is an Android-first beta. It works offline and does not require an account or backend.
+Gather Mind 0.6.1 is an Android-first beta. It works offline and does not require an account or backend.
 
 The app follows the phone's light or dark appearance by default. Choose a fixed mode under **Settings & privacy → Appearance** if preferred; the choice is stored locally on the phone.
+
+## Optional Health and cycle tracking
+
+Enable **Settings & privacy → Health tracking** only if it is useful to you. It adds the Health tab for daily mood and sleep-quality choices. Once Health is on, a separate **Cycle tracking** switch can reveal manually entered period history and Today estimates. Turning Health off hides the tab; turning cycle tracking off hides only period-related UI. Neither deletes encrypted entries; use **Clear health history** inside Health to remove them.
+
+Each period can have a start and optional end date. Period length is counted from start through end, while cycle timing and variation are calculated start to start. An estimate requires at least two usefully spaced starts and may be inaccurate when entries are missing or cycles vary. It does not predict ovulation or fertility and must not be used for contraception, diagnosis, treatment, or medical decisions. Health entries stay local and never appear in the widget or notifications.
 
 ## Home-screen widget
 
@@ -20,7 +26,7 @@ Long-press an empty area of the Android home screen and choose **Widgets → Gat
 
 ## Data and deletion
 
-All content is held in an encrypted database local to the phone. The widget’s bounded summary is encrypted separately with Android Keystore. There is no server copy or recovery password. **Delete all local data** permanently removes all content, the widget summary, and scheduled Gather Mind reminders.
+All content, including optional health entries, is held in an encrypted database local to the phone. The widget’s bounded summary is encrypted separately with Android Keystore. There is no server copy or recovery password. **Delete all local data** permanently removes all content, the widget summary, and scheduled Gather Mind reminders.
 
 ## App lock troubleshooting
 

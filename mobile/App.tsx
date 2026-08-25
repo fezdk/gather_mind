@@ -13,8 +13,12 @@ import {
   AgendaItem, Appointment, AppState, DailyTask, EditorDraft, REMINDER_OPTIONS, Thought, dateKeyAfter,
   canPostponeTask, createEmptyState, createGoalFromThought, createTask, createTaskStep, describeCountdown, groupUpcomingAppointments, localDateFromKey, localDateKey, makeId, relatedThoughts, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts, suggestedAppointments, suggestedTags, thoughtsWithTag,
   taskCarryOverLabel, taskPostponeLimit, taskStepSummary, tasksForToday, tasksForTomorrow, tasksScheduledAhead, toggleTaskCompletion, toggleTaskStep, upcomingAppointments, updateTaskSchedule, updateTaskSteps,
-  type AppointmentSuggestion, type TaskRecurrence, type TaskStep, type ThoughtRelation,
+  type AppointmentSuggestion, type HealthRating, type HealthState, type TaskRecurrence, type TaskStep, type ThoughtRelation,
 } from './src/model';
+import {
+  addPeriodStart, clearHealthHistory, cycleForecast, cycleHistorySummary, cycleTodayInsight, healthRatingLabel,
+  periodDurationDays, removePeriod, setDailyHealthRating, setPeriodEnd, type HealthField,
+} from './src/health';
 import { clearState as clearStoredState, closeStateStorage, loadEditorDraft, loadState, saveEditorDraft, saveState } from './src/storage';
 import {
   DAILY_STATUS_KIND, cancelReminder, clearDailyGoalStatus, configureNotifications, notificationsEnabled,
@@ -40,7 +44,7 @@ import { DARK_COLORS, LIGHT_COLORS, type ThemeColors } from './src/theme';
 import { clearWidgetSnapshot, updateWidgetSnapshot } from './src/widget';
 import { parseWidgetRoute, type WidgetRoute } from './src/widget-model';
 
-type Tab = 'today' | 'thoughts' | 'appointments';
+type Tab = 'today' | 'thoughts' | 'appointments' | 'health';
 type PickerMode = 'date' | 'time' | null;
 type Notice = { text: string; actionLabel?: string; onAction?: () => void };
 type LockStatus = 'checking' | 'locked' | 'unlocking' | 'unlocked';
@@ -1209,6 +1213,84 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     ]);
   }
 
+  function changeHealthEnabled(enabled: boolean) {
+    const current = stateRef.current;
+    if (!current || current.health.enabled === enabled) return;
+    if (!commit({ ...current, health: { ...current.health, enabled } })) return;
+    if (!enabled && tab === 'health') setTab('today');
+    flash(enabled ? 'Health tracking is on' : 'Health tracking is hidden');
+  }
+
+  function changeCycleTrackingEnabled(enabled: boolean) {
+    const current = stateRef.current;
+    if (!current || current.health.cycleTrackingEnabled === enabled) return;
+    if (!commit({ ...current, health: { ...current.health, cycleTrackingEnabled: enabled } })) return;
+    flash(enabled ? 'Cycle tracking is on' : 'Cycle tracking is hidden');
+  }
+
+  function changeHealthRating(field: HealthField, rating: HealthRating) {
+    const current = stateRef.current;
+    if (!current) return;
+    const health = setDailyHealthRating(current.health, localDateKey(), field, rating);
+    if (health === current.health || !commit({ ...current, health })) return;
+    flash('Today’s check-in saved');
+  }
+
+  function logCycleStart(date: string) {
+    const current = stateRef.current;
+    if (!current) return;
+    const health = addPeriodStart(current.health, date);
+    if (health === current.health) {
+      const duplicate = current.health.periods.some((period) => period.start === date);
+      Alert.alert(duplicate ? 'Date already logged' : 'Date could not be logged', duplicate ? 'Choose another date, or remove the existing period first.' : 'A new period cannot start before the previous logged period has ended.');
+      return;
+    }
+    if (commit({ ...current, health })) flash('Period start saved');
+  }
+
+  function savePeriodEnd(start: string, end: string | null) {
+    const current = stateRef.current;
+    if (!current) return;
+    const health = setPeriodEnd(current.health, start, end);
+    if (health === current.health) {
+      if (current.health.periods.some((period) => period.start === start && period.end === end)) {
+        flash('Period end unchanged');
+        return;
+      }
+      Alert.alert('Date could not be saved', 'The end date must be between this period’s start and the next logged period.');
+      return;
+    }
+    if (commit({ ...current, health })) flash(end ? 'Period end saved' : 'Period end cleared');
+  }
+
+  function confirmRemovePeriod(date: string) {
+    Alert.alert('Remove this period?', shortDate.format(localDateFromKey(date)), [
+      { text: 'Keep it', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => {
+        const current = stateRef.current;
+        if (!current) return;
+        const health = removePeriod(current.health, date);
+        if (health !== current.health && commit({ ...current, health })) flash('Period removed');
+      } },
+    ]);
+  }
+
+  function confirmClearHealthHistory() {
+    Alert.alert(
+      'Clear health history?',
+      'This permanently removes every mood, sleep, and saved period entry. Your Health and cycle settings will stay as they are.',
+      [
+        { text: 'Keep my history', style: 'cancel' },
+        { text: 'Clear history', style: 'destructive', onPress: () => {
+          const current = stateRef.current;
+          if (!current) return;
+          const health = clearHealthHistory(current.health);
+          if (commit({ ...current, health })) flash('Health history cleared');
+        } },
+      ],
+    );
+  }
+
   async function deleteAllData() {
     if (deletingAllRef.current) return;
     deletingAllRef.current = true;
@@ -1277,7 +1359,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   function confirmDeleteAllData() {
     Alert.alert(
       'Delete all Gather Mind data?',
-      'This permanently removes every thought, goal, appointment, appointment-plan item, encrypted widget summary, and scheduled reminder from this phone. This cannot be undone.',
+      'This permanently removes every thought, goal, appointment, appointment-plan item, health entry, encrypted widget summary, and scheduled reminder from this phone. This cannot be undone.',
       [
         { text: 'Keep my data', style: 'cancel' },
         { text: 'Delete everything', style: 'destructive', onPress: () => void deleteAllData() },
@@ -1342,20 +1424,22 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         { text: 'Delete', style: 'destructive', onPress: () => deleteAppointment(selected) },
       ])}
     /> : <>
-      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} />}
+      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />}
       {tab === 'thoughts' && <ThoughtsView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
       {tab === 'appointments' && <AppointmentsView appointments={state.appointments} onAdd={openAppointmentEditor} onOpen={setSelectedId} />}
+      {tab === 'health' && state.health.enabled && <HealthView health={state.health} onRate={changeHealthRating} onLogCycleStart={logCycleStart} onSetPeriodEnd={savePeriodEnd} onRemovePeriod={confirmRemovePeriod} onClearHistory={confirmClearHealthHistory} />}
       <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
         <NavButton label="Today" symbol="⌂" active={tab === 'today'} onPress={() => setTab('today')} />
         <NavButton label="Appointments" icon="calendar" active={tab === 'appointments'} onPress={() => setTab('appointments')} />
         <NavButton label="Thoughts" symbol="⌘" active={tab === 'thoughts'} onPress={() => setTab('thoughts')} />
+        {state.health.enabled && <NavButton label="Health" icon="health" active={tab === 'health'} onPress={() => setTab('health')} />}
       </View>
     </>}
 
     <ThoughtModal visible={thoughtModal} thought={editingThought} thoughts={state.thoughts} appointments={state.appointments} hasGoal={editingThoughtHasGoal} draft={editorDraft?.kind === 'thought' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeThoughtEditor} onSave={saveThought} onTurnIntoGoal={turnThoughtIntoGoal} onDelete={deleteThought} preselectedId={selectedId ?? ''} />
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
-    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
+    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -1388,7 +1472,7 @@ function LockedScreen({ topInset, unlocking, onUnlock }: { topInset: number; unl
   </SafeAreaView>;
 }
 
-function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onAddAppointment, onOpen }: { state: AppState; notificationsOn: boolean; onEnable: () => void; onCapture: () => void; onAddTask: () => void; onEditTask: (task: DailyTask) => void; onToggleTask: (task: DailyTask) => void; onToggleTaskStep: (taskId: string, stepId: string) => void; onPostponeTask: (task: DailyTask) => void; onRestoreTask: (task: DailyTask) => void; onAddAppointment: () => void; onOpen: (id: string) => void }) {
+function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onAddAppointment, onOpen, onOpenHealth }: { state: AppState; notificationsOn: boolean; onEnable: () => void; onCapture: () => void; onAddTask: () => void; onEditTask: (task: DailyTask) => void; onToggleTask: (task: DailyTask) => void; onToggleTaskStep: (taskId: string, stepId: string) => void; onPostponeTask: (task: DailyTask) => void; onRestoreTask: (task: DailyTask) => void; onAddAppointment: () => void; onOpen: (id: string) => void; onOpenHealth: () => void }) {
   const { C, s } = useAppTheme();
   const { bottom } = useSafeAreaInsets();
   const next = upcomingAppointments(state.appointments)[0];
@@ -1397,11 +1481,13 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onE
   const tomorrowTasks = tasksForTomorrow(state.tasks, today);
   const scheduledAhead = tasksScheduledAhead(state.tasks, today);
   const completed = todayTasks.filter((task) => task.completedOn === today).length;
+  const healthInsight = cycleTodayInsight(state.health, today);
   return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
     <Text style={s.eyebrow}>{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</Text>
     <Text style={s.title} accessibilityRole="header">One thing at a time.</Text>
     <Pressable style={s.capture} onPress={onCapture} accessibilityRole="button" accessibilityLabel="Capture a thought" accessibilityHint="Opens quick thought capture"><View style={s.plus} importantForAccessibility="no-hide-descendants"><Text style={s.plusText} allowFontScaling={false}>+</Text></View><View style={s.flex}><Text style={s.captureTitle}>What’s on your mind?</Text><Text style={s.captureSub}>Catch it now. Sort it later.</Text></View><Text style={s.arrow} allowFontScaling={false}>›</Text></Pressable>
     {!notificationsOn && <View style={s.nudge}><View style={s.flex}><Text style={s.cardTitle}>Make reminders dependable</Text><Text style={s.small}>Allow the phone to alert you even when Gather Mind is closed.</Text></View><Pressable style={s.smallPrimary} onPress={onEnable} accessibilityRole="button" accessibilityLabel="Enable appointment reminders"><Text style={s.smallPrimaryText}>Enable</Text></Pressable></View>}
+    {!!healthInsight && <Pressable style={s.healthInsight} onPress={onOpenHealth} accessibilityRole="button" accessibilityLabel={`Cycle estimate. ${healthInsight.message}`} accessibilityHint="Opens Health"><View style={s.healthInsightIcon} importantForAccessibility="no-hide-descendants"><MaterialIcons name="favorite-border" size={20} color={C.accentText} /></View><View style={s.flex}><Text style={s.cardTitle}>Cycle estimate</Text><Text style={s.healthInsightMessage}>{healthInsight.message}</Text><Text style={s.small}>{healthInsight.detail}</Text></View><Text style={s.chevron} allowFontScaling={false}>›</Text></Pressable>}
     <View style={s.taskHeading}><View style={s.flex}><Text style={s.eyebrow}>Today’s gentle list</Text><Text style={s.sectionTitle} accessibilityRole="header">{completed} of {todayTasks.length} complete</Text></View><CreationButton label="Goal +" accessibilityLabel="Add a goal" onPress={onAddTask} /></View>
     <View style={s.progressTrack} accessible={todayTasks.length > 0} importantForAccessibility={todayTasks.length ? "yes" : "no"} accessibilityRole={todayTasks.length ? "progressbar" : "none"} accessibilityLabel="Goals completed today" accessibilityValue={todayTasks.length ? { min: 0, max: todayTasks.length, now: completed, text: `${completed} of ${todayTasks.length}` } : undefined}><View style={[s.progressFill, { width: todayTasks.length ? `${Math.round(completed / todayTasks.length * 100)}%` : '0%' }]} /></View>
     <Text style={s.swipeHint}>Tap to edit · swipe right to complete · left for tomorrow</Text>
@@ -1410,6 +1496,166 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onE
     {!!scheduledAhead.length && <View style={[s.tomorrowBox, s.scheduledAheadBox]}><Text style={s.tomorrowTitle} accessibilityRole="header">Scheduled ahead</Text>{scheduledAhead.map((task) => <Pressable style={s.scheduledTaskRow} key={`scheduled-${task.id}`} onPress={() => onEditTask(task)} accessibilityRole="button" accessibilityLabel={`Edit ${task.title}, scheduled ${taskDate.format(localDateFromKey(task.scheduledFor))}`}><View style={s.scheduledDate}><Text style={s.scheduledDateText}>{taskDate.format(localDateFromKey(task.scheduledFor))}</Text></View><View style={s.flex}><Text style={s.scheduledTaskText}>{task.title}</Text><Text style={s.scheduledTaskMeta}>{taskRecurrenceName(task.recurrence)}</Text></View><Text style={s.scheduledChevron} allowFontScaling={false}>›</Text></Pressable>)}</View>}
     <View style={s.sectionAction}><View style={s.flex}><Text style={s.eyebrow}>Coming up</Text><Text style={s.sectionTitle} accessibilityRole="header">Your next appointment</Text></View><CreationButton label="Appointment +" accessibilityLabel="Add an appointment" onPress={onAddAppointment} /></View>
     {next ? <AppointmentCard appointment={next} linkedCount={state.thoughts.filter((thought) => thought.appointmentId === next.id).length} onPress={() => onOpen(next.id)} /> : <Empty title="Nothing scheduled" body="Add an appointment when you’re ready." />}
+  </ScrollView>;
+}
+
+const HEALTH_RATINGS: HealthRating[] = [1, 2, 3, 4, 5];
+
+function HealthRatingPicker({ field, value, onRate }: { field: HealthField; value: HealthRating | null; onRate: (field: HealthField, rating: HealthRating) => void }) {
+  const { s } = useAppTheme();
+  const title = field === 'mood' ? 'Mood' : 'Sleep quality';
+  return <View style={s.healthRatingGroup} accessibilityLabel={`${title} rating`}>
+    <Text style={s.healthRatingTitle}>{title}</Text>
+    <View style={s.healthRatingOptions}>{HEALTH_RATINGS.map((rating) => {
+      const selected = value === rating;
+      const label = healthRatingLabel(field, rating);
+      return <Pressable key={rating} style={[s.healthRatingOption, selected && s.healthRatingOptionSelected]} onPress={() => onRate(field, rating)} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={`${title}: ${label}, ${rating} of 5`}>
+        <Text style={[s.healthRatingNumber, selected && s.healthRatingTextSelected]}>{rating}</Text>
+        <Text style={[s.healthRatingLabel, selected && s.healthRatingTextSelected]}>{label}</Text>
+      </Pressable>;
+    })}</View>
+  </View>;
+}
+
+function HealthView({ health, onRate, onLogCycleStart, onSetPeriodEnd, onRemovePeriod, onClearHistory }: { health: HealthState; onRate: (field: HealthField, rating: HealthRating) => void; onLogCycleStart: (date: string) => void; onSetPeriodEnd: (start: string, end: string | null) => void; onRemovePeriod: (start: string) => void; onClearHistory: () => void }) {
+  const { C, s } = useAppTheme();
+  const { bottom } = useSafeAreaInsets();
+  const today = localDateKey();
+  const todayCheckIn = health.checkIns.find((checkIn) => checkIn.date === today);
+  const [cycleDate, setCycleDate] = useState(() => localDateFromKey(today));
+  const [showCycleDatePicker, setShowCycleDatePicker] = useState(false);
+  const [endingPeriodStart, setEndingPeriodStart] = useState<string | null>(null);
+  const [periodEndDate, setPeriodEndDate] = useState(() => localDateFromKey(today));
+  const [showPeriodEndDatePicker, setShowPeriodEndDatePicker] = useState(false);
+  const selectedCycleDate = localDateKey(cycleDate);
+  const forecast = cycleForecast(health, today);
+  const historySummary = cycleHistorySummary(health, today);
+  const recentCheckIns = health.checkIns.slice(0, 7);
+  const recentPeriods = [...health.periods].sort((a, b) => b.start.localeCompare(a.start)).slice(0, 8);
+  const hasHistory = health.checkIns.length > 0 || health.periods.length > 0;
+  const selectedCycleDateExists = health.periods.some((period) => period.start === selectedCycleDate);
+
+  function maximumEndDate(start: string) {
+    const nextStart = health.periods.map((period) => period.start).filter((date) => date > start).sort()[0];
+    const maximum = nextStart ? dateKeyAfter(nextStart, -1) : today;
+    return maximum < today ? maximum : today;
+  }
+
+  function changeCycleDate(event: DateTimePickerEvent, value?: Date) {
+    if (Platform.OS === 'android') setShowCycleDatePicker(false);
+    if (event.type === 'dismissed' || !value) return;
+    const dateKey = localDateKey(value);
+    if (dateKey <= today) setCycleDate(localDateFromKey(dateKey));
+  }
+
+  function beginPeriodEnd(period: HealthState['periods'][number]) {
+    const initialEnd = period.end ?? period.start;
+    setEndingPeriodStart(period.start);
+    setPeriodEndDate(localDateFromKey(initialEnd));
+    setShowPeriodEndDatePicker(true);
+  }
+
+  function changePeriodEndDate(event: DateTimePickerEvent, value?: Date) {
+    if (Platform.OS === 'android') setShowPeriodEndDatePicker(false);
+    if (event.type === 'dismissed' || !value || !endingPeriodStart) return;
+    const dateKey = localDateKey(value);
+    if (dateKey >= endingPeriodStart && dateKey <= maximumEndDate(endingPeriodStart)) setPeriodEndDate(localDateFromKey(dateKey));
+  }
+
+  function finishPeriodEnd(end: string | null) {
+    if (!endingPeriodStart) return;
+    onSetPeriodEnd(endingPeriodStart, end);
+    setEndingPeriodStart(null);
+    setShowPeriodEndDatePicker(false);
+  }
+
+  let forecastMessage = 'Log two period starts to create a simple estimate.';
+  if (health.periods.length === 1) forecastMessage = 'One period start logged. Log one more to create an estimate.';
+  if (health.periods.length >= 2 && !forecast) forecastMessage = 'There is not enough useful spacing between the logged starts for an estimate yet.';
+  if (forecast) {
+    const estimateDate = shortDate.format(localDateFromKey(forecast.estimatedStart));
+    forecastMessage = forecast.daysUntil >= 0
+      ? `Next start may be around ${estimateDate}.`
+      : `The last estimate was around ${estimateDate}. Log a newer start when it happens to refresh it.`;
+  }
+
+  return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
+    <Text style={s.eyebrow}>Mood & sleep check-ins</Text>
+    <Text style={s.title} accessibilityRole="header">Health</Text>
+    <Text style={s.subtitle}>Track mood and sleep on this phone. Optional cycle tracking can be enabled separately in Settings.</Text>
+
+    <View style={s.healthCard}>
+      <Text style={s.eyebrow}>Today</Text>
+      <Text style={s.sectionTitle} accessibilityRole="header">How are things?</Text>
+      <Text style={s.healthCardCopy}>Choose what fits without overthinking it. Tap the selected answer again to clear it.</Text>
+      <HealthRatingPicker field="mood" value={todayCheckIn?.mood ?? null} onRate={onRate} />
+      <HealthRatingPicker field="sleep" value={todayCheckIn?.sleep ?? null} onRate={onRate} />
+    </View>
+
+    {health.cycleTrackingEnabled && <View style={s.healthCard}>
+      <Text style={s.eyebrow}>Cycle</Text>
+      <Text style={s.sectionTitle} accessibilityRole="header">Log a period</Text>
+      <Text style={s.healthCardCopy}>Log the first day of bleeding. Add the end date when you know it; cycle timing is still compared start to start.</Text>
+      <Pressable style={s.healthDateButton} onPress={() => setShowCycleDatePicker(true)} accessibilityRole="button" accessibilityLabel={`Choose cycle start date, currently ${shortDate.format(cycleDate)}`}>
+        <MaterialIcons name="event" size={20} color={C.accentText} importantForAccessibility="no" />
+        <View style={s.flex}><Text style={s.dateLabel}>START DATE</Text><Text style={s.dateValue}>{shortDate.format(cycleDate)}</Text></View>
+        <Text style={s.chevron} allowFontScaling={false}>›</Text>
+      </Pressable>
+      {showCycleDatePicker && <View style={s.pickerWrap}><DateTimePicker value={cycleDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} maximumDate={localDateFromKey(today)} onChange={changeCycleDate} />{Platform.OS === 'ios' && <Pressable style={s.pickerDoneButton} onPress={() => setShowCycleDatePicker(false)} accessibilityRole="button"><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
+      <Primary label={selectedCycleDateExists ? 'This date is already logged' : 'Log period start'} onPress={() => onLogCycleStart(selectedCycleDate)} disabled={selectedCycleDateExists} />
+
+      <View style={s.healthForecast} accessible accessibilityLabel={`Cycle estimate. ${forecastMessage}`}>
+        <Text style={s.cardTitle}>History & estimate</Text>
+        <Text style={s.healthForecastText}>{forecastMessage}</Text>
+        {historySummary.cycleIntervalsUsed > 1 && <Text style={s.inputHint}>Typical recorded start-to-start interval: about {historySummary.typicalCycleDays} days. Recent intervals varied by up to {historySummary.cycleRangeDays} days across {historySummary.cycleIntervalsUsed} cycles.</Text>}
+        {historySummary.cycleIntervalsUsed === 1 && <Text style={s.inputHint}>Recorded start-to-start interval: {historySummary.typicalCycleDays} days. More starts will show how much timing varies.</Text>}
+        {historySummary.typicalPeriodDays !== null && <Text style={s.inputHint}>Typical recorded period length: about {historySummary.typicalPeriodDays} days from {historySummary.periodDurationsUsed} completed {historySummary.periodDurationsUsed === 1 ? 'entry' : 'entries'}.</Text>}
+      </View>
+
+      {!!recentPeriods.length && <View style={s.healthHistorySection}>
+        <Text style={s.healthHistoryTitle} accessibilityRole="header">Period history</Text>
+        {recentPeriods.map((period) => {
+          const duration = period.end ? periodDurationDays(period.start, period.end) : null;
+          const editing = endingPeriodStart === period.start;
+          return <View key={period.start} style={s.healthPeriodBlock}>
+            <View style={s.healthHistoryRow}>
+              <View style={s.healthHistoryContent} accessible accessibilityLabel={`Period started ${taskDate.format(localDateFromKey(period.start))}. ${period.end ? `Ended ${taskDate.format(localDateFromKey(period.end))}, ${duration} days.` : 'End not logged.'}`}>
+                <Text style={s.healthHistoryDate}>Started {taskDate.format(localDateFromKey(period.start))}</Text>
+                <Text style={s.healthHistoryMeta}>{period.end ? `Ended ${shortDate.format(localDateFromKey(period.end))} · ${duration} days` : 'End not logged'}</Text>
+              </View>
+              <View style={s.healthHistoryActions}>
+                <Pressable style={s.healthHistoryButton} onPress={() => beginPeriodEnd(period)} accessibilityRole="button" accessibilityLabel={`${period.end ? 'Edit' : 'Add'} end date for period started ${taskDate.format(localDateFromKey(period.start))}`}><Text style={s.healthHistoryButtonText}>{period.end ? 'Edit end' : 'Add end'}</Text></Pressable>
+                <Pressable style={s.healthRemoveButton} onPress={() => onRemovePeriod(period.start)} accessibilityRole="button" accessibilityLabel={`Remove period started ${taskDate.format(localDateFromKey(period.start))}`}><Text style={s.healthRemoveText}>Remove</Text></Pressable>
+              </View>
+            </View>
+            {editing && <View style={s.healthEndEditor}>
+              <Text style={s.cardTitle}>Period end</Text>
+              <Text style={s.small}>Choose the last day of bleeding for this period.</Text>
+              <Pressable style={s.healthDateButton} onPress={() => setShowPeriodEndDatePicker(true)} accessibilityRole="button" accessibilityLabel={`Choose period end date, currently ${shortDate.format(periodEndDate)}`}>
+                <MaterialIcons name="event" size={20} color={C.accentText} importantForAccessibility="no" />
+                <View style={s.flex}><Text style={s.dateLabel}>END DATE</Text><Text style={s.dateValue}>{shortDate.format(periodEndDate)}</Text></View>
+                <Text style={s.chevron} allowFontScaling={false}>›</Text>
+              </Pressable>
+              {showPeriodEndDatePicker && <View style={s.pickerWrap}><DateTimePicker value={periodEndDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} minimumDate={localDateFromKey(period.start)} maximumDate={localDateFromKey(maximumEndDate(period.start))} onChange={changePeriodEndDate} />{Platform.OS === 'ios' && <Pressable style={s.pickerDoneButton} onPress={() => setShowPeriodEndDatePicker(false)} accessibilityRole="button"><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
+              <View style={s.healthEndActions}>
+                <Pressable style={s.healthEndSaveButton} onPress={() => finishPeriodEnd(localDateKey(periodEndDate))} accessibilityRole="button"><Text style={s.healthEndSaveText}>Save end date</Text></Pressable>
+                {period.end && <Pressable style={s.healthEndClearButton} onPress={() => finishPeriodEnd(null)} accessibilityRole="button"><Text style={s.healthHistoryButtonText}>Clear end</Text></Pressable>}
+                <Pressable style={s.healthEndClearButton} onPress={() => { setEndingPeriodStart(null); setShowPeriodEndDatePicker(false); }} accessibilityRole="button"><Text style={s.healthHistoryButtonText}>Cancel</Text></Pressable>
+              </View>
+            </View>}
+          </View>;
+        })}
+      </View>}
+      <Text style={s.disclaimer}>Cycle dates are estimates only. Do not use Gather Mind for contraception, diagnosis, treatment, or decisions requiring medical accuracy.</Text>
+    </View>}
+
+    {!!recentCheckIns.length && <View style={s.healthCard}>
+      <Text style={s.eyebrow}>Recent check-ins</Text>
+      <Text style={s.sectionTitle} accessibilityRole="header">Mood & sleep history</Text>
+      {recentCheckIns.map((checkIn) => <View key={checkIn.date} style={s.healthCheckInRow} accessible accessibilityLabel={`${taskDate.format(localDateFromKey(checkIn.date))}. Mood ${checkIn.mood ? healthRatingLabel('mood', checkIn.mood) : 'not logged'}. Sleep ${checkIn.sleep ? healthRatingLabel('sleep', checkIn.sleep) : 'not logged'}.`}><Text style={s.healthCheckInDate}>{taskDate.format(localDateFromKey(checkIn.date))}</Text><Text style={s.small}>Mood · {checkIn.mood ? healthRatingLabel('mood', checkIn.mood) : '—'}</Text><Text style={s.small}>Sleep · {checkIn.sleep ? healthRatingLabel('sleep', checkIn.sleep) : '—'}</Text></View>)}
+    </View>}
+
+    {hasHistory && <Pressable style={[s.dangerButton, s.healthClearButton]} onPress={onClearHistory} accessibilityRole="button"><Text style={s.dangerText}>Clear health history</Text></Pressable>}
   </ScrollView>;
 }
 
@@ -1965,7 +2211,7 @@ function AppointmentModal({ visible, appointment, baseline, draft, onDraftChange
   </Sheet>;
 }
 
-function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, widgetDetailsEnabled, widgetSettingBusy, appLockEnabled, appLockDelayMs, appLockBusy, onClose, onEnable, onThemeModeChange, onDailyStatusChange, onDailyStatusMinutesChange, onWidgetDetailsChange, onAppLockChange, onAppLockDelayChange, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; themeMode: ThemeMode; dailyStatusEnabled: boolean; dailyStatusMinutes: number; dailyStatusBusy: boolean; widgetDetailsEnabled: boolean; widgetSettingBusy: boolean; appLockEnabled: boolean; appLockDelayMs: AppLockDelayMs; appLockBusy: boolean; onClose: () => void; onEnable: () => void; onThemeModeChange: (mode: ThemeMode) => void; onDailyStatusChange: (enabled: boolean) => void; onDailyStatusMinutesChange: (minutes: number) => void; onWidgetDetailsChange: (enabled: boolean) => void; onAppLockChange: (enabled: boolean) => void; onAppLockDelayChange: (delayMs: AppLockDelayMs) => void; onPrivacy: () => void; onDeleteAll: () => void }) {
+function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTrackingEnabled, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, widgetDetailsEnabled, widgetSettingBusy, appLockEnabled, appLockDelayMs, appLockBusy, onClose, onEnable, onThemeModeChange, onHealthEnabledChange, onCycleTrackingEnabledChange, onDailyStatusChange, onDailyStatusMinutesChange, onWidgetDetailsChange, onAppLockChange, onAppLockDelayChange, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; themeMode: ThemeMode; healthEnabled: boolean; cycleTrackingEnabled: boolean; dailyStatusEnabled: boolean; dailyStatusMinutes: number; dailyStatusBusy: boolean; widgetDetailsEnabled: boolean; widgetSettingBusy: boolean; appLockEnabled: boolean; appLockDelayMs: AppLockDelayMs; appLockBusy: boolean; onClose: () => void; onEnable: () => void; onThemeModeChange: (mode: ThemeMode) => void; onHealthEnabledChange: (enabled: boolean) => void; onCycleTrackingEnabledChange: (enabled: boolean) => void; onDailyStatusChange: (enabled: boolean) => void; onDailyStatusMinutesChange: (minutes: number) => void; onWidgetDetailsChange: (enabled: boolean) => void; onAppLockChange: (enabled: boolean) => void; onAppLockDelayChange: (delayMs: AppLockDelayMs) => void; onPrivacy: () => void; onDeleteAll: () => void }) {
   const { C, s } = useAppTheme();
   const [showDailyStatusTimePicker, setShowDailyStatusTimePicker] = useState(false);
   useEffect(() => { if (!visible || !dailyStatusEnabled) setShowDailyStatusTimePicker(false); }, [visible, dailyStatusEnabled]);
@@ -1974,10 +2220,14 @@ function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyS
     if (event.type === 'dismissed' || !value) return;
     onDailyStatusMinutesChange(value.getHours() * 60 + value.getMinutes());
   }
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.0" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.1" title="Settings & privacy">
     <Field heading>Appearance</Field>
     <View style={s.themeChoices}>{THEME_MODE_OPTIONS.map((option) => <Pressable key={option.value} style={[s.themeChoice, themeMode === option.value && s.themeChoiceSelected]} onPress={() => onThemeModeChange(option.value)} accessibilityRole="radio" accessibilityState={{ checked: themeMode === option.value }} accessibilityLabel={`Appearance: ${option.label}`}><Text style={[s.themeChoiceText, themeMode === option.value && s.themeChoiceTextSelected]}>{option.label}</Text></Pressable>)}</View>
     <Text style={s.privacy}>Follow device changes automatically with your phone’s light or dark appearance.</Text>
+    <Field heading>Health</Field>
+    <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Health tracking</Text><Text style={s.small}>Add a private Health tab for optional daily mood and sleep-quality check-ins.</Text></View><Switch style={s.switchControl} value={healthEnabled} onValueChange={onHealthEnabledChange} trackColor={{ false: C.line, true: C.sage }} thumbColor={healthEnabled ? C.accentSolid : C.white} accessibilityLabel="Show Health tracking" /></View>
+    {healthEnabled && <View style={[s.securitySetting, s.healthSubSetting]}><View style={s.flex}><Text style={s.cardTitle}>Cycle tracking</Text><Text style={s.small}>Optionally record period starts and ends, review timing history, and see local estimates. This is separate from mood and sleep tracking.</Text></View><Switch style={s.switchControl} value={cycleTrackingEnabled} onValueChange={onCycleTrackingEnabledChange} trackColor={{ false: C.line, true: C.sage }} thumbColor={cycleTrackingEnabled ? C.accentSolid : C.white} accessibilityLabel="Show cycle tracking" /></View>}
+    <Text style={s.privacy}>Turning Health off hides the tab. Turning cycle tracking off hides only period history and Today cycle estimates. Neither setting deletes encrypted entries.</Text>
     <Field heading>Appointment reminders</Field>
     <View style={s.reminderStatus}><View style={[s.statusDot, enabled && s.statusDotOn]} importantForAccessibility="no" /><View style={s.flex}><Text style={s.cardTitle} accessibilityLiveRegion="polite">{enabled ? 'Reminders are enabled' : 'Reminders are off'}</Text><Text style={s.small}>Scheduled locally by your phone. No account, internet connection, or backend is needed.</Text></View></View>
     {!enabled && <Primary label="Enable reminders" onPress={onEnable} />}
@@ -2007,18 +2257,18 @@ function SettingsModal({ visible, enabled, themeMode, dailyStatusEnabled, dailyS
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   const { s } = useAppTheme();
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 23 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind 0.6.0 does not collect, transmit, sell, or share your thoughts, goals, appointments, or usage data.</Text></View>
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 25 August 2026" title="Privacy, data & support">
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind 0.6.1 does not collect, transmit, sell, or share your thoughts, goals, appointments, optional health entries, or usage data.</Text></View>
     <Field heading>What the app stores</Field>
-    <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. Its random key is kept in the phone’s secure key store. The Android home-screen widget receives a bounded summary encrypted separately with Android Keystore. Its default count-and-time mode excludes titles; showing titles requires your explicit choice because home-screen content is visible without Gather Mind’s app lock. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
+    <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. This includes optional mood, sleep-quality, and period start/end entries when their features are enabled. The random database key is kept in the phone’s secure key store. The Android home-screen widget receives a bounded summary encrypted separately with Android Keystore; it never receives health entries. Its default count-and-time mode excludes titles; showing titles requires your explicit choice because home-screen content is visible without Gather Mind’s app lock. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field heading>Permissions</Field>
-    <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. You can deny notifications and leave both optional features off.</Text>
+    <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. Health tracking requires no Android health permission, sensor permission, or Internet access. You can deny notifications and leave every optional feature off.</Text>
     <Field heading>Retention and deletion</Field>
-    <Text style={s.policyText}>Data remains until you delete individual items, use the control below, clear the app’s storage, or uninstall the app. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
+    <Text style={s.policyText}>Data remains until you delete individual items, clear health history from Health, use the control below, clear the app’s storage, or uninstall the app. Turning Health off hides the tab; turning cycle tracking off hides period history and Today cycle estimates. Neither erases encrypted history. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field heading>Support</Field>
     <Text style={s.policyText}>For a reminder problem, check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings. Open and save the appointment again after changing permissions.</Text>
     <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues')} accessibilityRole="link"><Text style={s.secondaryText}>Open GitHub support</Text></Pressable>
-    <Text style={s.disclaimer}>Gather Mind is an organisational aid, not a medical device, diagnostic tool, treatment, or substitute for professional care. The source code is Apache-2.0 licensed; that software licence does not grant anyone rights to your personal content.</Text>
+    <Text style={s.disclaimer}>Gather Mind is an organisational aid, not a medical device, diagnostic tool, treatment, or substitute for professional care. Cycle estimates must not be used for contraception or medical decisions. The source code is Apache-2.0 licensed; that software licence does not grant anyone rights to your personal content.</Text>
     <Pressable style={[s.dangerButton, s.modalDanger]} onPress={onDeleteAll} accessibilityRole="button"><Text style={s.dangerText}>Delete all local data</Text></Pressable>
   </Sheet>;
 }
@@ -2169,10 +2419,10 @@ function CalendarNavIcon({ active }: { active: boolean }) {
   </View>;
 }
 
-function NavButton({ label, symbol, icon, active, onPress }: { label: string; symbol?: string; icon?: 'calendar'; active: boolean; onPress: () => void }) {
-  const { s } = useAppTheme();
+function NavButton({ label, symbol, icon, active, onPress }: { label: string; symbol?: string; icon?: 'calendar' | 'health'; active: boolean; onPress: () => void }) {
+  const { C, s } = useAppTheme();
   return <Pressable style={s.navButton} onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={label}>
-    {icon === 'calendar' ? <CalendarNavIcon active={active} /> : <Text style={[s.navSymbol, active && s.navActive]} allowFontScaling={false}>{symbol}</Text>}
+    {icon === 'calendar' ? <CalendarNavIcon active={active} /> : icon === 'health' ? <MaterialIcons name="favorite-border" size={24} color={active ? C.accentText : C.muted} importantForAccessibility="no" /> : <Text style={[s.navSymbol, active && s.navActive]} allowFontScaling={false}>{symbol}</Text>}
     <Text style={[s.navLabel, active && s.navActive]}>{label}</Text>
   </Pressable>;
 }
@@ -2184,12 +2434,13 @@ function makeStyles(C: ThemeColors) { return StyleSheet.create({
   brandMark: { width: 30, height: 28 }, dotOne: { position: 'absolute', width: 18, height: 18, borderRadius: 10, borderWidth: 2, borderColor: C.accentText, top: 0 }, dotTwo: { position: 'absolute', width: 17, height: 17, borderRadius: 10, borderWidth: 2, borderColor: C.accentText, right: 0, top: 4 }, dotThree: { position: 'absolute', width: 18, height: 17, borderRadius: 10, borderWidth: 2, borderColor: C.accentText, left: 7, bottom: 0, backgroundColor: C.paper }, settings: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, settingsIcon: { color: C.accentText, fontSize: 20 },
   content: { flex: 1 }, body: { padding: 22, paddingBottom: 112 }, detailBody: { padding: 20, paddingBottom: 42 }, eyebrow: { color: C.accentText, fontSize: 11, fontWeight: '700', letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 6 }, title: { color: C.ink, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 34, lineHeight: 39, fontWeight: '600', letterSpacing: -1 }, subtitle: { color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 4, marginBottom: 18 }, between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 },
   capture: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 18, borderRadius: 23, backgroundColor: C.accentSolid, marginTop: 22, marginBottom: 8 }, plus: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.sagePale, alignItems: 'center', justifyContent: 'center' }, plusText: { color: C.accentText, fontSize: 28 }, captureTitle: { color: C.white, fontWeight: '700', fontSize: 17 }, captureSub: { color: '#FFFFFFD1', marginTop: 3, fontSize: 13 }, arrow: { color: C.white, fontSize: 30 },
-  nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: C.yellow, borderRadius: 17, marginTop: 10 }, smallPrimary: { minHeight: 48, justifyContent: 'center', backgroundColor: C.accentSolid, paddingHorizontal: 13, borderRadius: 11 }, smallPrimaryText: { color: C.white, fontWeight: '700', fontSize: 12 }, section: { marginTop: 30, marginBottom: 12 }, sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 12 }, sectionTitle: { color: C.ink, fontSize: 19, fontWeight: '700' }, creationButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: C.accentSolid }, creationButtonText: { color: C.white, fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: C.yellow, borderRadius: 17, marginTop: 10 }, smallPrimary: { minHeight: 48, justifyContent: 'center', backgroundColor: C.accentSolid, paddingHorizontal: 13, borderRadius: 11 }, smallPrimaryText: { color: C.white, fontWeight: '700', fontSize: 12 }, healthInsight: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 10 }, healthInsightIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: C.card }, healthInsightMessage: { color: C.ink, fontSize: 13, lineHeight: 19, fontWeight: '700', marginTop: 2, marginBottom: 3 }, section: { marginTop: 30, marginBottom: 12 }, sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 12 }, sectionTitle: { color: C.ink, fontSize: 19, fontWeight: '700' }, creationButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: C.accentSolid }, creationButtonText: { color: C.white, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   taskHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 10 }, progressTrack: { height: 8, overflow: 'hidden', borderRadius: 4, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, progressFill: { height: '100%', borderRadius: 3, backgroundColor: C.accentSolid }, swipeHint: { color: C.muted, fontSize: 10, textAlign: 'center', marginVertical: 9 }, taskList: { gap: 8 },
   swipeShell: { overflow: 'hidden', borderRadius: 16, backgroundColor: C.accentSolid }, swipeUnder: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }, completeReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, tomorrowReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, lockedReveal: { color: C.sagePale }, taskRow: { minHeight: 72, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: C.line }, taskMainRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, taskCheckTarget: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, taskCheck: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadge: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadgeText: { color: C.accentText, fontSize: 9, fontWeight: '900' }, taskCheckDone: { borderColor: C.accentText, backgroundColor: C.accentSolid }, taskCheckText: { color: C.white, fontWeight: '900' }, taskEditTarget: { minHeight: 48, justifyContent: 'center' }, taskText: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19 }, taskDone: { color: C.muted, textDecorationLine: 'line-through' }, taskMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 4 }, carryOverText: { color: C.ink, fontSize: 10, fontWeight: '700' }, dailyBadge: { color: C.ink, fontSize: 10, fontWeight: '800' }, movedText: { color: C.moved, fontSize: 10, fontWeight: '800' }, lockIcon: { color: C.ink, fontSize: 11 },
   taskStepsSection: { marginTop: 4, marginLeft: 56 }, taskStepSummary: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 2, borderRadius: 10, overflow: 'hidden' }, taskStepSummaryPressed: { backgroundColor: C.sagePale }, taskStepProgressTrack: { width: 34, height: 6, overflow: 'hidden', borderRadius: 3, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskStepProgressFill: { height: '100%', borderRadius: 2, backgroundColor: C.ink }, taskStepSummaryText: { flex: 1, color: C.ink, fontSize: 10, fontWeight: '700' }, taskStepDisclosure: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, taskStepsList: { gap: 5, paddingTop: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line }, taskStepRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4 }, taskStepCheck: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.3, borderColor: C.sage, backgroundColor: C.card }, taskStepCheckDone: { borderColor: C.accentText, backgroundColor: C.accentSolid }, taskStepCheckText: { color: C.white, fontSize: 11, fontWeight: '900' }, taskStepText: { flex: 1, color: C.ink, fontSize: 12, lineHeight: 17, fontWeight: '600' }, taskStepTextDone: { color: C.ink, textDecorationLine: 'line-through' },
   tomorrowBox: { marginTop: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line }, tomorrowTitle: { color: C.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 9 }, tomorrowRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }, tomorrowEdit: { flex: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 4 }, stressDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: '#00000010' }, tomorrowText: { color: C.ink, fontSize: 13, fontWeight: '600' }, restoreButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: C.sagePale }, restoreText: { color: C.accentText, fontSize: 10, fontWeight: '800' }, scheduledAheadBox: { borderColor: `${C.line}99` }, scheduledTaskRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }, scheduledDate: { minWidth: 78, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: C.line }, scheduledDateText: { color: C.muted, fontSize: 10, fontWeight: '800', textAlign: 'center' }, scheduledTaskText: { color: C.muted, fontSize: 13, fontWeight: '600' }, scheduledTaskMeta: { color: C.muted, fontSize: 10, fontWeight: '700' }, scheduledChevron: { color: C.muted, fontSize: 23, opacity: .65 },
   appointmentCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, dateBlock: { width: 64, height: 68, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sagePale }, dateMonth: { color: C.accentText, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' }, dateDay: { color: C.accentText, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 29, fontWeight: '600' }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: '700', marginBottom: 3 }, small: { color: C.muted, fontSize: 12, lineHeight: 17 }, reminderLine: { color: C.accentText, fontSize: 11, fontWeight: '600', marginTop: 7 }, chevron: { color: C.muted, fontSize: 28 },
+  healthCard: { padding: 18, borderRadius: 22, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 14 }, healthCardCopy: { color: C.muted, fontSize: 13, lineHeight: 19, marginTop: 5 }, healthRatingGroup: { marginTop: 20 }, healthRatingTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 9 }, healthRatingOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, healthRatingOption: { width: '31%', minHeight: 64, flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, paddingVertical: 8, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, healthRatingOptionSelected: { borderColor: C.accentText, backgroundColor: C.accentSolid }, healthRatingNumber: { color: C.accentText, fontSize: 17, fontWeight: '900' }, healthRatingLabel: { color: C.muted, fontSize: 10, lineHeight: 14, fontWeight: '700', textAlign: 'center', marginTop: 2 }, healthRatingTextSelected: { color: C.white }, healthDateButton: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper, marginTop: 15 }, healthForecast: { padding: 14, borderRadius: 14, backgroundColor: C.sagePale, marginTop: 14 }, healthForecastText: { color: C.ink, fontSize: 13, lineHeight: 19, marginTop: 3 }, healthHistorySection: { marginTop: 18 }, healthHistoryTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 5 }, healthPeriodBlock: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }, healthHistoryRow: { minHeight: 64, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }, healthHistoryContent: { flex: 1, minWidth: 130, paddingVertical: 9 }, healthHistoryDate: { color: C.ink, fontSize: 12, lineHeight: 18, fontWeight: '700' }, healthHistoryMeta: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 2 }, healthHistoryActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }, healthHistoryButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 }, healthHistoryButtonText: { color: C.accentText, fontSize: 11, fontWeight: '800' }, healthRemoveButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 }, healthRemoveText: { color: C.danger, fontSize: 11, fontWeight: '800' }, healthEndEditor: { padding: 13, borderRadius: 14, backgroundColor: C.sagePale, marginBottom: 12 }, healthEndActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }, healthEndSaveButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 11, backgroundColor: C.accentSolid }, healthEndSaveText: { color: C.white, fontSize: 11, fontWeight: '800' }, healthEndClearButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10 }, healthCheckInDate: { color: C.ink, fontSize: 12, lineHeight: 18, fontWeight: '700' }, healthCheckInRow: { paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, gap: 2 }, healthClearButton: { flex: 0, marginTop: 4 },
   empty: { padding: 22, alignItems: 'center', gap: 3, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line, backgroundColor: C.card }, thread: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 9 }, threadMain: { flex: 1, minWidth: 0, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 3 }, threadDot: { width: 10, height: 10, borderRadius: 5 }, threadText: { color: C.ink, fontSize: 14, fontWeight: '600', lineHeight: 19 }, threadChevron: { color: C.muted, fontSize: 23 }, threadExplore: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 11, backgroundColor: C.sagePale }, threadExploreText: { color: C.accentText, fontSize: 10, fontWeight: '800' }, tags: { color: C.muted, fontSize: 11, marginTop: 3 },
   thoughtCreate: { alignSelf: 'flex-start', marginBottom: 12 }, searchField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 14 }, searchInput: { flex: 1, minWidth: 0, minHeight: 48, paddingVertical: 10, color: C.ink, fontSize: 15 }, searchHint: { color: C.muted, fontSize: 11, fontWeight: '700', marginTop: 12, marginBottom: 7 }, thoughtListHeading: { marginTop: 22, marginBottom: 10 }, thoughtList: { marginTop: 10 }, connectionToggle: { flex: 0, marginTop: 4 }, cloudCard: { padding: 14, backgroundColor: C.card, borderRadius: 22, borderWidth: 1, borderColor: C.line, marginTop: 15, overflow: 'hidden' }, cloudEmpty: { marginTop: 14 }, connectionFocus: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19, marginTop: 2 }, textButton: { minHeight: 48, justifyContent: 'center' }, link: { color: C.accentText, fontSize: 12, fontWeight: '700', padding: 8 }, mindMap: { height: MIND_MAP_HEIGHT, position: 'relative', marginTop: 6 }, largeTextMapFallback: { gap: 12, paddingVertical: 18 }, largeTextMapButton: { flex: 0 }, connectionLine: { position: 'absolute', height: 2, borderRadius: 2, backgroundColor: C.sage }, focusBubble: { position: 'absolute', width: FOCUS_BUBBLE_SIZE, height: FOCUS_BUBBLE_SIZE, borderRadius: FOCUS_BUBBLE_SIZE / 2, padding: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, borderWidth: 4, borderColor: C.sagePale, elevation: 4 }, focusLabel: { color: C.white, fontSize: 8, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }, focusBubbleText: { color: C.white, fontSize: 12, lineHeight: 16, fontWeight: '800', textAlign: 'center' }, relationBubble: { position: 'absolute', width: RELATION_BUBBLE_SIZE, height: RELATION_BUBBLE_SIZE, borderRadius: RELATION_BUBBLE_SIZE / 2, padding: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.card, elevation: 2 }, relationBubbleText: { color: C.ink, fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' }, relationBubbleReason: { color: C.accentText, fontSize: 7, lineHeight: 9, fontWeight: '900', textAlign: 'center', marginTop: 3 }, noConnections: { position: 'absolute', left: 44, right: 44, bottom: 50, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 13, backgroundColor: C.paper, borderWidth: 1, borderColor: C.line }, noConnectionsText: { color: C.muted, fontSize: 10, fontWeight: '700', textAlign: 'center' }, mapHint: { position: 'absolute', left: 0, right: 0, bottom: 1, color: C.muted, fontSize: 8, fontWeight: '700', textAlign: 'center' },
   scheduleAction: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: C.accentSolid, paddingHorizontal: 18 }, scheduleActionText: { color: C.white, fontSize: 14, fontWeight: '800' }, calendarList: { gap: 22, marginTop: 26 }, calendarDay: { gap: 10 }, calendarDayHeader: { flexDirection: 'row', alignItems: 'center', gap: 9 }, calendarDayDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.sage }, calendarDayLabel: { color: C.accentText, fontSize: 12, fontWeight: '800' }, calendarDayCards: { gap: 10, paddingLeft: 13, borderLeftWidth: 1, borderLeftColor: C.line }, nav: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.card, paddingBottom: Platform.OS === 'ios' ? 12 : 4 }, navButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 }, navSymbol: { color: C.muted, fontSize: 23 }, navLabel: { color: C.muted, fontSize: 10, fontWeight: '600' }, navActive: { color: C.accentText, fontWeight: '800' }, calendarNavIcon: { width: 26, height: 24, transform: [{ rotate: '-2deg' }] }, calendarNavPage: { position: 'absolute', left: 2, top: 4, width: 22, height: 19, overflow: 'hidden', borderWidth: 1.7, borderRadius: 6, backgroundColor: C.card }, calendarNavPageActive: { backgroundColor: C.sagePale }, calendarNavRing: { position: 'absolute', top: 1, width: 2.5, height: 8, borderRadius: 2 }, calendarNavRingLeft: { left: 7 }, calendarNavRingRight: { right: 7 }, calendarNavDivider: { position: 'absolute', left: 0, right: 0, top: 5, height: 1.5, opacity: .72 }, calendarNavDateLarge: { position: 'absolute', left: 5, top: 10, width: 6, height: 4, borderRadius: 3 }, calendarNavDateSmall: { position: 'absolute', left: 13, top: 10, width: 3.5, height: 4, borderRadius: 2, opacity: .55 },
@@ -2200,5 +2451,5 @@ function makeStyles(C: ThemeColors) { return StyleSheet.create({
   chips: { flexDirection: 'row', gap: 8, paddingBottom: 4 }, reminderChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 4 }, suggestionChips: { flexDirection: 'row', gap: 8, paddingTop: 9, paddingBottom: 2 }, showAllLink: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' }, chip: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 24, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, chipSelected: { backgroundColor: C.accentSolid, borderColor: C.accentText }, chipText: { color: C.muted, fontSize: 12, fontWeight: '600' }, chipTextSelected: { color: C.white }, inputHint: { color: C.muted, fontSize: 10, lineHeight: 14, marginTop: 6 }, primary: { minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, marginTop: 22, paddingHorizontal: 14, paddingVertical: 10 }, primaryText: { color: C.white, fontSize: 14, fontWeight: '800', textAlign: 'center' }, disabled: { opacity: .45 }, thoughtToGoal: { flex: 0, marginTop: 10, backgroundColor: C.sagePale }, thoughtToGoalHint: { color: C.muted, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 6, marginBottom: 2 }, sourceThoughtCard: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 10 }, sourceThoughtLabel: { color: C.accentText, fontSize: 9, fontWeight: '900', letterSpacing: .8, textTransform: 'uppercase', marginBottom: 2 }, sourceThoughtText: { color: C.ink, fontSize: 12, lineHeight: 17, fontWeight: '600' }, taskTypeChoices: { gap: 8 }, taskType: { minHeight: 48, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskTypeSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, taskTypeTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 2 }, taskPlanChoices: { flexDirection: 'row', gap: 8, marginTop: 9 }, taskPlanChoice: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskPlanChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, taskPlanChoiceText: { color: C.muted, fontSize: 11, fontWeight: '800', textAlign: 'center' }, taskPlanChoiceTextSelected: { color: C.accentText }, taskPlanChoiceDate: { color: C.muted, fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 3 }, dailyNote: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 13, backgroundColor: C.yellow, marginTop: 10 }, dailyNoteIcon: { color: C.accentText, fontSize: 12 }, dateRow: { flexDirection: 'row', gap: 10, marginTop: 14 }, dateButton: { flex: 1, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 13 }, taskDateButton: { flex: 0, marginTop: 9 }, dateLabel: { color: C.accentText, fontSize: 9, fontWeight: '800', letterSpacing: 1 }, dateValue: { color: C.ink, fontSize: 15, fontWeight: '700', marginTop: 4 }, pickerWrap: { marginTop: 8, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card }, pickerDoneButton: { minHeight: 48, justifyContent: 'center', alignItems: 'flex-end' }, pickerDone: { color: C.accentText, fontWeight: '800', textAlign: 'right', paddingHorizontal: 12 },
   makeSmallerButton: { flex: 0, marginTop: 12, backgroundColor: C.sagePale }, makeSmallerHint: { color: C.muted, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 6 }, stepEditor: { gap: 8, padding: 14, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 12 }, stepEditorTitle: { color: C.ink, fontSize: 14, fontWeight: '800' }, stepEditorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, stepNumber: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: C.accentSolid }, stepNumberText: { color: C.white, fontSize: 10, fontWeight: '900' }, stepEditorInput: { flex: 1, minHeight: 48, paddingHorizontal: 11, fontSize: 13 }, removeStepButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: C.card }, removeStepText: { color: C.danger, fontSize: 22, lineHeight: 24 }, addStepButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 11, borderWidth: 1, borderStyle: 'dashed', borderColor: C.sage, backgroundColor: C.card, marginTop: 2 }, addStepText: { color: C.accentText, fontSize: 12, fontWeight: '800' },
   themeChoices: { flexDirection: 'row', gap: 8 }, themeChoice: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, themeChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, themeChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, themeChoiceTextSelected: { color: C.accentText, fontWeight: '900' },
-  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, securitySetting: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, switchControl: { minWidth: 48, minHeight: 48 }, dailyStatusTimeSetting: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, dailyStatusTimeButton: { minWidth: 82, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: C.sagePale }, dailyStatusTimeText: { color: C.accentText, fontSize: 14, fontWeight: '900' }, lockDelaySetting: { padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, lockDelayChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, lockDelayChoice: { width: '48%', minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, lockDelayChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, lockDelayChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, lockDelayChoiceTextSelected: { color: C.accentText, fontWeight: '900' }, spacedButton: { marginTop: 12 }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, minHeight: 48, paddingVertical: 9, paddingLeft: 14, paddingRight: 8, borderRadius: 13, backgroundColor: C.toastBackground, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 20 }, toastText: { flex: 1, color: C.toastText, fontSize: 13, fontWeight: '600' }, toastAction: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#FFFFFF20' }, toastActionText: { color: C.white, fontSize: 12, fontWeight: '900' },
+  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, securitySetting: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, healthSubSetting: { marginTop: 10, marginLeft: 14, backgroundColor: C.sagePale }, switchControl: { minWidth: 48, minHeight: 48 }, dailyStatusTimeSetting: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, dailyStatusTimeButton: { minWidth: 82, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: C.sagePale }, dailyStatusTimeText: { color: C.accentText, fontSize: 14, fontWeight: '900' }, lockDelaySetting: { padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, lockDelayChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, lockDelayChoice: { width: '48%', minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, lockDelayChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, lockDelayChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, lockDelayChoiceTextSelected: { color: C.accentText, fontWeight: '900' }, spacedButton: { marginTop: 12 }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, minHeight: 48, paddingVertical: 9, paddingLeft: 14, paddingRight: 8, borderRadius: 13, backgroundColor: C.toastBackground, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 20 }, toastText: { flex: 1, color: C.toastText, fontSize: 13, fontWeight: '600' }, toastAction: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#FFFFFF20' }, toastActionText: { color: C.white, fontSize: 12, fontWeight: '900' },
 }); }

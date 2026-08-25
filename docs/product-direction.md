@@ -1,6 +1,6 @@
 # Gather Mind product direction
 
-Working product notes, not a committed release scope. Last updated 2026-08-23.
+Working product notes, not a committed release scope. Last updated 2026-08-25.
 
 ## Product promise
 
@@ -23,7 +23,9 @@ The app should remain calm, local-first, understandable without setup, and usefu
 
 ## Implementation status
 
-Included through the 0.6.0 source build:
+Included through the 0.6.1 source build:
+
+- Optional, default-off Health navigation with immediate 1–5 mood/sleep check-ins and a separate cycle-tracking opt-in. Period records support start and optional end dates, recorded-duration and start-to-start timing summaries, a simple median-based local estimate, and a five-day Today heads-up. Health history remains encrypted locally, can be cleared separately, and is excluded from widgets and notifications.
 
 - Default SQLCipher database encryption with a random 256-bit key in the operating system's secure key store.
 - Copy-first migration from the previous plaintext key-value store, with encrypted read-back verification before the old value is scrubbed.
@@ -274,7 +276,7 @@ Test with 5–8 people from the target audience:
 
 - automatic appointment assignment;
 - recursive thought hierarchies;
-- a comprehensive symptom, menstrual-cycle, medication, or HRT tracker;
+- a comprehensive clinical symptom, fertility, medication, or HRT tracker beyond the intentionally simple local Health check-in, period history, and cycle estimate;
 - cloud-based semantic matching or task decomposition;
 - gamification, streaks, social features, or analytics;
 - server backup before local export/import and key recovery are reliable.

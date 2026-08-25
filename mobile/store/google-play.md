@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.6.0
+# Google Play listing and declarations — Gather Mind 0.6.1
 
 ## Product identity
 
@@ -20,20 +20,22 @@ Gather Mind works offline. There is no account, advertising, analytics, or cloud
 
 Choose a light or dark appearance, or let Gather Mind follow your phone automatically.
 
-Gather Mind is an organisational aid, not a medical device, diagnosis, treatment, or substitute for professional care.
+If useful to you, enable a private Health tab for simple daily mood and sleep-quality check-ins. Period history and local cycle estimates have a separate opt-in: record start and optional end dates, review recent timing and duration, and receive an optional Today note near an estimated next start. Both choices are off by default, health entries stay encrypted on the phone, and they never appear in widgets or notifications.
+
+Gather Mind is an organisational aid, not a medical device. It does not diagnose, treat, cure, or prevent any medical condition. Cycle estimates do not predict fertility or ovulation and must not be used for contraception or medical decisions.
 
 ## Console declarations
 
 - Ads: No.
 - App access: No account or default restricted area. The optional biometric app lock is off on a fresh installation and has no developer-issued credential.
-- Data safety: No data collected and no data shared. All user content is processed locally on the device, and the Android release does not request Internet access.
-- Account deletion: Not applicable because no account can be created. The in-app **Delete all local data** control erases content, the encrypted widget summary, and reminders.
+- Data safety: No data collected and no data shared. All user content, including optional mood, sleep-quality, and period start/end entries, is processed locally on the device, and the Android release does not request Internet access.
+- Account deletion: Not applicable because no account can be created. Health history can be cleared separately; the in-app **Delete all local data** control erases all content, the encrypted widget summary, and reminders.
 - Privacy-policy URL: host the project-level `docs/privacy.html` at a stable public HTTPS URL and enter it in Play Console.
 - Support URL: host the project-level `docs/support.html` at a stable public HTTPS URL.
 - Public project support: `https://github.com/fezdk/gather_mind/issues`.
 - Support email: configure a monitored address privately in Play Console; do not store it in this repository.
 - Exact alarms: locally chosen appointment-reminder and quiet-status times use Expo's Android alarm scheduler, which calls exact alarms when access is available and otherwise falls back to inexact delivery. Document the user-facing appointment-reminder function and optional quiet status honestly if Play requests a declaration.
-- Health apps: review and complete the Health apps declaration honestly. The proposed store category and product function are Productivity/organisation, but the app may be used for medication or health appointments and Google can still consider that context relevant.
+- Health apps: declare **Period Tracking** and **Sleep Management**. The mood check-in is a lightweight record rather than counselling or medical guidance; review the current form wording to determine whether Google also expects **Stress Management, Relaxation, Mental Acuity**. Do not select fertility awareness, ovulation prediction, medical-device, diagnosis, or treatment claims. Keep the public privacy-policy URL and the clear non-medical disclaimer above in the listing.
 - Target audience: choose the tested adult age groups; do not select children unless the product and disclosures are redesigned for them.
 - Content rating: complete the IARC questionnaire from actual functionality.
 

@@ -55,10 +55,11 @@ const baseTask = {
 
 test('new installations start with no demo or personal data', () => {
   assert.deepEqual(createEmptyState(), {
-    version: 4,
+    version: 6,
     thoughts: [],
     appointments: [],
     tasks: [],
+    health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
   });
 });
 
@@ -69,10 +70,41 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const legacy = { version: 1, thoughts: [{ id: 'legacy' }], appointments: [] };
   assert.deepEqual(parseStoredState(JSON.stringify(legacy), 'test storage'), {
-    version: 4,
+    version: 6,
     thoughts: [{ id: 'legacy' }],
     appointments: [],
     tasks: [],
+    health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
+  });
+
+  const versionFive = {
+    version: 5,
+    thoughts: [],
+    appointments: [],
+    tasks: [],
+    health: { enabled: true, checkIns: [{ date: today, mood: 3, sleep: null }], cycleStarts: ['2026-08-18', '2026-07-20'] },
+  };
+  assert.deepEqual(parseStoredState(JSON.stringify(versionFive), 'test storage'), {
+    version: 6,
+    thoughts: [],
+    appointments: [],
+    tasks: [],
+    health: {
+      enabled: true,
+      cycleTrackingEnabled: true,
+      checkIns: [{ date: today, mood: 3, sleep: null }],
+      periods: [{ start: '2026-08-18', end: null }, { start: '2026-07-20', end: null }],
+    },
+  });
+  assert.equal(parseStoredState(JSON.stringify({ ...versionFive, health: { ...versionFive.health, enabled: false } }), 'test storage').health.cycleTrackingEnabled, false);
+
+  const versionFour = { version: 4, thoughts: [], appointments: [], tasks: [baseTask] };
+  assert.deepEqual(parseStoredState(JSON.stringify(versionFour), 'test storage'), {
+    version: 6,
+    thoughts: [],
+    appointments: [],
+    tasks: [baseTask],
+    health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
   });
 
   const versionThree = {
@@ -83,10 +115,11 @@ test('encrypted storage keeps current state and migrates the previous state shap
   };
   delete versionThree.tasks[0].steps;
   assert.deepEqual(parseStoredState(JSON.stringify(versionThree), 'test storage'), {
-    version: 4,
+    version: 6,
     thoughts: [],
     appointments: [],
     tasks: [baseTask],
+    health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
   });
 
   const versionTwo = {
@@ -107,6 +140,11 @@ test('encrypted storage keeps current state and migrates the previous state shap
 test('unreadable stored content fails without being replaced by empty state', () => {
   assert.throws(() => parseStoredState('{not json', 'test storage'), /left untouched/);
   assert.throws(() => parseStoredState(JSON.stringify({ version: 99 }), 'test storage'), /left untouched/);
+  const current = createEmptyState();
+  assert.throws(() => parseStoredState(JSON.stringify({ ...current, health: { enabled: true, cycleTrackingEnabled: true, checkIns: [{ date: today, mood: 6, sleep: null }], periods: [] } }), 'test storage'), /left untouched/);
+  assert.throws(() => parseStoredState(JSON.stringify({ ...current, health: { enabled: true, cycleTrackingEnabled: true, checkIns: [], periods: [{ start: 'not-a-date', end: null }] } }), 'test storage'), /left untouched/);
+  assert.throws(() => parseStoredState(JSON.stringify({ ...current, health: { enabled: true, cycleTrackingEnabled: true, checkIns: [], periods: [{ start: '2026-08-01', end: '2026-07-31' }] } }), 'test storage'), /left untouched/);
+  assert.throws(() => parseStoredState(JSON.stringify({ ...current, health: { enabled: true, cycleTrackingEnabled: true, checkIns: [], periods: [{ start: '2026-08-20', end: null }, { start: '2026-08-01', end: '2026-08-20' }] } }), 'test storage'), /left untouched/);
 });
 
 test('encrypted editor drafts accept supported forms and reject malformed content', () => {

@@ -4,6 +4,15 @@ All notable Gather Mind changes are documented here.
 
 ## Unreleased
 
+## 0.6.1 — 2026-08-25
+
+- Added optional, default-off **Health tracking** that reveals a private Health tab with immediate on-device 1–5 mood and sleep-quality check-ins.
+- Added a separate **Cycle tracking** opt-in inside Health settings, so the general tracker remains useful without period-related UI or Today estimates.
+- Added period history with start and optional end dates, recorded-duration summaries, removable entries, and a separate confirmed **Clear health history** action.
+- Added a conservative cycle estimate based on the median of recent user-entered start-to-start intervals, recent timing variation, and a Today note only within five days of the estimate, with explicit contraception and medical-use warnings.
+- Migrated existing encrypted state to the new health-aware schemas without losing thoughts, goals, appointments, plans, health check-ins, or cycle starts; users of the interim combined Health/cycle setting keep their existing visibility choice.
+- Kept health entries in the SQLCipher database and out of notifications, widgets, accounts, analytics, and all network traffic; updated privacy, support, Google Play declaration, and physical QA guidance accordingly.
+
 ## 0.6.0 — 2026-08-23
 
 - Unified the Today and Thoughts creation actions with compact green **Goal +**, **Appointment +**, and **Thought +** buttons, moved thought creation above search, and added a visible search icon.

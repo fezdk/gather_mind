@@ -59,6 +59,7 @@ Physical-device release checks should cover:
 - TalkBack and Switch Access navigation for every flow, including the custom move-to-tomorrow action and Undo announcement;
 - Android font size at 200%, reduced motion, and Accessibility Scanner in light and dark appearance, including every sheet with the keyboard open.
 - home-screen widget discovery and resizing on at least Pixel and Samsung launchers; compact/expanded layouts, light/dark system appearance, counts-only/detail privacy, date rollover, deep links through app lock, and Delete all widget cleanup.
+- Health default-off migration and opt-in/out; separate cycle opt-in; 1–5 mood/sleep selection and clearing; period start/end add/edit/remove with date bounds; duration and start-to-start variation; median estimate and five-day Today window; separate health-history deletion and full deletion; no health content in widgets or notifications; TalkBack, 200% font, light/dark, restart persistence, and explicit non-medical/contraception warnings.
 
 ## Versioning a release
 

@@ -23,6 +23,26 @@ export type Appointment = {
   agenda: AgendaItem[];
 };
 
+export type HealthRating = 1 | 2 | 3 | 4 | 5;
+
+export type DailyHealthCheckIn = {
+  date: string;
+  mood: HealthRating | null;
+  sleep: HealthRating | null;
+};
+
+export type PeriodRecord = {
+  start: string;
+  end: string | null;
+};
+
+export type HealthState = {
+  enabled: boolean;
+  cycleTrackingEnabled: boolean;
+  checkIns: DailyHealthCheckIn[];
+  periods: PeriodRecord[];
+};
+
 export type TaskRecurrence = 'once' | 'daily' | 'weekly' | 'monthly';
 
 export type TaskStep = {
@@ -61,10 +81,11 @@ export type EditorDraft =
   | { kind: 'agenda'; appointmentId: string; itemId: string | null; text: string };
 
 export type AppState = {
-  version: 4;
+  version: 6;
   thoughts: Thought[];
   appointments: Appointment[];
   tasks: DailyTask[];
+  health: HealthState;
 };
 
 export const REMINDER_OPTIONS = [
@@ -75,8 +96,12 @@ export const REMINDER_OPTIONS = [
   { value: 1440, label: '1 day' },
 ] as const;
 
+export function createEmptyHealthState(): HealthState {
+  return { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] };
+}
+
 export function createEmptyState(): AppState {
-  return { version: 4, thoughts: [], appointments: [], tasks: [] };
+  return { version: 6, thoughts: [], appointments: [], tasks: [], health: createEmptyHealthState() };
 }
 
 export function createGoalFromThought(thought: Thought, today = localDateKey(), now = new Date()): DailyTask {
