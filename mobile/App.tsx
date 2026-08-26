@@ -12,7 +12,7 @@ import { SafeAreaProvider, SafeAreaView, initialWindowMetrics, useSafeAreaInsets
 import {
   AgendaItem, Appointment, AppState, DailyTask, EditorDraft, REMINDER_OPTIONS, Thought, dateKeyAfter,
   canPostponeTask, createEmptyState, createGoalFromThought, createTask, createTaskStep, describeCountdown, groupUpcomingAppointments, localDateFromKey, localDateKey, makeId, relatedThoughts, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts, suggestedAppointments, suggestedTags, thoughtsWithTag,
-  taskCarryOverLabel, taskPostponeLimit, taskStepSummary, tasksForToday, tasksForTomorrow, tasksScheduledAhead, toggleTaskCompletion, toggleTaskStep, upcomingAppointments, updateTaskSchedule, updateTaskSteps,
+  nextTaskSortOrder, reorderTasks, taskCarryOverLabel, taskPostponeLimit, taskStepSummary, tasksForToday, tasksForTomorrow, tasksScheduledAhead, toggleTaskCompletion, toggleTaskStep, upcomingAppointments, updateTaskSchedule, updateTaskSteps,
   type AppointmentSuggestion, type HealthRating, type HealthState, type TaskRecurrence, type TaskStep, type ThoughtRelation,
 } from './src/model';
 import {
@@ -1041,7 +1041,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       return;
     }
     const updatedThought = { ...thought, ...input, text: input.text.trim() };
-    const goal = createGoalFromThought(updatedThought, today);
+    const goal = { ...createGoalFromThought(updatedThought, today), sortOrder: nextTaskSortOrder(state.tasks) };
     if (!commit({
       ...state,
       thoughts: state.thoughts.map((item) => item.id === thought.id ? updatedThought : item),
@@ -1113,7 +1113,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     const today = localDateKey();
     let task: DailyTask;
     if (!existing) {
-      task = createTask(title, recurrence, scheduledFor, new Date(), steps);
+      task = { ...createTask(title, recurrence, scheduledFor, new Date(), steps), sortOrder: nextTaskSortOrder(state.tasks) };
     } else {
       task = updateTaskSteps({ ...updateTaskSchedule(existing, recurrence, scheduledFor, today), title }, steps);
     }
@@ -1141,6 +1141,14 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     if (baseline?.kind === 'task' && baseline.itemId === taskId) editorBaselineRef.current = { ...baseline, steps: nextTask.steps };
     const draft = editorDraftRef.current;
     if (draft?.kind === 'task' && draft.itemId === taskId) editorDraftRef.current = { ...draft, steps: nextTask.steps };
+  }
+
+  function reorderTodayTasks(orderedIds: string[], message = 'Goal order saved') {
+    const current = stateRef.current;
+    if (!current) return;
+    const tasks = reorderTasks(current.tasks, orderedIds);
+    if (tasks === current.tasks || !commit({ ...current, tasks })) return;
+    flash(message);
   }
 
   function toggleTask(task: DailyTask) {
@@ -1397,6 +1405,10 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const pendingTask = state.tasks.find((item) => item.id === pendingPostponeId);
   const editorDraft = editorDraftRef.current;
   const appointmentEditorBaseline = editorBaselineRef.current?.kind === 'appointment' ? editorBaselineRef.current : undefined;
+  function navigateToTab(nextTab: Tab) {
+    setSelectedId(null);
+    setTab(nextTab);
+  }
 
   return <><SafeAreaView style={[s.app, { paddingTop: topInset }]} edges={['right', 'left']}>
     <ExpoStatusBar style={isDark ? 'light' : 'dark'} backgroundColor={C.paper} translucent />
@@ -1415,6 +1427,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       onDraftChange={updateEditorDraft}
       onDraftDiscard={discardEditorDraft}
       onBack={() => setSelectedId(null)}
+      backLabel={tab === 'today' ? 'Today' : 'Appointments'}
       onChange={(appointment) => commit({ ...state, appointments: state.appointments.map((item) => item.id === appointment.id ? appointment : item) })}
       onAddThought={() => openThought()}
       onEditThought={openThought}
@@ -1424,17 +1437,17 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         { text: 'Delete', style: 'destructive', onPress: () => deleteAppointment(selected) },
       ])}
     /> : <>
-      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />}
+      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onReorderTasks={reorderTodayTasks} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />}
       {tab === 'thoughts' && <ThoughtsView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
       {tab === 'appointments' && <AppointmentsView appointments={state.appointments} onAdd={openAppointmentEditor} onOpen={setSelectedId} />}
       {tab === 'health' && state.health.enabled && <HealthView health={state.health} onRate={changeHealthRating} onLogCycleStart={logCycleStart} onSetPeriodEnd={savePeriodEnd} onRemovePeriod={confirmRemovePeriod} onClearHistory={confirmClearHealthHistory} />}
-      <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
-        <NavButton label="Today" symbol="⌂" active={tab === 'today'} onPress={() => setTab('today')} />
-        <NavButton label="Appointments" icon="calendar" active={tab === 'appointments'} onPress={() => setTab('appointments')} />
-        <NavButton label="Thoughts" symbol="⌘" active={tab === 'thoughts'} onPress={() => setTab('thoughts')} />
-        {state.health.enabled && <NavButton label="Health" icon="health" active={tab === 'health'} onPress={() => setTab('health')} />}
-      </View>
     </>}
+    <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
+      <NavButton label="Today" symbol="⌂" active={tab === 'today'} onPress={() => navigateToTab('today')} />
+      <NavButton label="Appointments" icon="calendar" active={tab === 'appointments'} onPress={() => navigateToTab('appointments')} />
+      <NavButton label="Thoughts" symbol="⌘" active={tab === 'thoughts'} onPress={() => navigateToTab('thoughts')} />
+      {state.health.enabled && <NavButton label="Health" icon="health" active={tab === 'health'} onPress={() => navigateToTab('health')} />}
+    </View>
 
     <ThoughtModal visible={thoughtModal} thought={editingThought} thoughts={state.thoughts} appointments={state.appointments} hasGoal={editingThoughtHasGoal} draft={editorDraft?.kind === 'thought' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeThoughtEditor} onSave={saveThought} onTurnIntoGoal={turnThoughtIntoGoal} onDelete={deleteThought} preselectedId={selectedId ?? ''} />
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
@@ -1472,17 +1485,183 @@ function LockedScreen({ topInset, unlocking, onUnlock }: { topInset: number; unl
   </SafeAreaView>;
 }
 
-function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onAddAppointment, onOpen, onOpenHealth }: { state: AppState; notificationsOn: boolean; onEnable: () => void; onCapture: () => void; onAddTask: () => void; onEditTask: (task: DailyTask) => void; onToggleTask: (task: DailyTask) => void; onToggleTaskStep: (taskId: string, stepId: string) => void; onPostponeTask: (task: DailyTask) => void; onRestoreTask: (task: DailyTask) => void; onAddAppointment: () => void; onOpen: (id: string) => void; onOpenHealth: () => void }) {
-  const { C, s } = useAppTheme();
+type TodayViewProps = {
+  state: AppState;
+  notificationsOn: boolean;
+  onEnable: () => void;
+  onCapture: () => void;
+  onAddTask: () => void;
+  onEditTask: (task: DailyTask) => void;
+  onToggleTask: (task: DailyTask) => void;
+  onToggleTaskStep: (taskId: string, stepId: string) => void;
+  onPostponeTask: (task: DailyTask) => void;
+  onRestoreTask: (task: DailyTask) => void;
+  onReorderTasks: (orderedIds: string[], message?: string) => void;
+  onAddAppointment: () => void;
+  onOpen: (id: string) => void;
+  onOpenHealth: () => void;
+};
+
+type TaskDragSession = { taskId: string; baseOrder: string[]; initialTop: number; initialScrollY: number; latestDy: number };
+const TASK_LIST_GAP = 8;
+
+function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onReorderTasks, onAddAppointment, onOpen, onOpenHealth }: TodayViewProps) {
+  const { C, s, reduceMotion } = useAppTheme();
   const { bottom } = useSafeAreaInsets();
   const next = upcomingAppointments(state.appointments)[0];
   const today = localDateKey();
   const todayTasks = tasksForToday(state.tasks, today);
+  const todayTaskIds = todayTasks.map((task) => task.id);
+  const taskById = new Map(todayTasks.map((task) => [task.id, task]));
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const dragOrderRef = useRef<string[] | null>(null);
+  const dragSessionRef = useRef<TaskDragSession | null>(null);
+  const rowHeightsRef = useRef(new Map<string, number>());
+  const dragTranslateY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollViewportRef = useRef({ top: 0, height: 0, measured: false });
+  const scrollContentHeightRef = useRef(0);
+  const autoScrollDirectionRef = useRef<-1 | 0 | 1>(0);
+  const autoScrollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const displayedTaskIds = dragOrder ?? todayTaskIds;
+  const displayedTodayTasks = displayedTaskIds.flatMap((id) => {
+    const task = taskById.get(id);
+    return task ? [task] : [];
+  });
   const tomorrowTasks = tasksForTomorrow(state.tasks, today);
   const scheduledAhead = tasksScheduledAhead(state.tasks, today);
   const completed = todayTasks.filter((task) => task.completedOn === today).length;
   const healthInsight = cycleTodayInsight(state.health, today);
-  return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
+  useEffect(() => () => stopAutoScroll(), []);
+  function rowHeight(taskId: string) {
+    return rowHeightsRef.current.get(taskId) ?? 74;
+  }
+  function rowTop(order: string[], taskId: string) {
+    const index = order.indexOf(taskId);
+    if (index <= 0) return 0;
+    return order.slice(0, index).reduce((top, id) => top + rowHeight(id) + TASK_LIST_GAP, 0);
+  }
+  function beginTaskDrag(taskId: string) {
+    const baseOrder = dragOrderRef.current ?? todayTaskIds;
+    if (baseOrder.length < 2 || !baseOrder.includes(taskId)) return;
+    dragTranslateY.stopAnimation();
+    dragTranslateY.setValue(0);
+    dragSessionRef.current = { taskId, baseOrder: [...baseOrder], initialTop: rowTop(baseOrder, taskId), initialScrollY: scrollOffsetRef.current, latestDy: 0 };
+    dragOrderRef.current = [...baseOrder];
+    setDragOrder([...baseOrder]);
+    setDraggingTaskId(taskId);
+    scrollViewportRef.current.measured = false;
+    scrollRef.current?.getNativeScrollRef()?.measureInWindow((_x, top, _width, height) => { scrollViewportRef.current = { top, height, measured: true }; });
+  }
+  function updateDraggedTaskPosition(taskId: string, dy: number) {
+    const session = dragSessionRef.current;
+    const currentOrder = dragOrderRef.current;
+    if (!session || !currentOrder || session.taskId !== taskId) return;
+    const scrollDelta = scrollOffsetRef.current - session.initialScrollY;
+    const desiredCenter = session.initialTop + rowHeight(taskId) / 2 + dy + scrollDelta;
+    let top = 0;
+    let targetIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    session.baseOrder.forEach((id, index) => {
+      const center = top + rowHeight(id) / 2;
+      const distance = Math.abs(center - desiredCenter);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        targetIndex = index;
+      }
+      top += rowHeight(id) + TASK_LIST_GAP;
+    });
+    const currentIndex = currentOrder.indexOf(taskId);
+    let nextOrder = currentOrder;
+    if (currentIndex !== targetIndex) {
+      nextOrder = [...currentOrder];
+      nextOrder.splice(currentIndex, 1);
+      nextOrder.splice(targetIndex, 0, taskId);
+      if (!reduceMotion) LayoutAnimation.configureNext(LayoutAnimation.create(120, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+      dragOrderRef.current = nextOrder;
+      setDragOrder(nextOrder);
+    }
+    dragTranslateY.setValue(dy + scrollDelta - (rowTop(nextOrder, taskId) - session.initialTop));
+  }
+  function stopAutoScroll() {
+    if (autoScrollTimerRef.current) clearInterval(autoScrollTimerRef.current);
+    autoScrollTimerRef.current = null;
+    autoScrollDirectionRef.current = 0;
+  }
+  function startAutoScroll(direction: -1 | 0 | 1) {
+    if (direction === autoScrollDirectionRef.current) return;
+    stopAutoScroll();
+    if (!direction) return;
+    autoScrollDirectionRef.current = direction;
+    autoScrollTimerRef.current = setInterval(() => {
+      const session = dragSessionRef.current;
+      if (!session) {
+        stopAutoScroll();
+        return;
+      }
+      const maximumOffset = Math.max(0, scrollContentHeightRef.current - scrollViewportRef.current.height);
+      const nextOffset = Math.max(0, Math.min(maximumOffset, scrollOffsetRef.current + direction * 12));
+      if (nextOffset === scrollOffsetRef.current) {
+        stopAutoScroll();
+        return;
+      }
+      scrollOffsetRef.current = nextOffset;
+      scrollRef.current?.scrollTo({ y: nextOffset, animated: false });
+      updateDraggedTaskPosition(session.taskId, session.latestDy);
+    }, 32);
+  }
+  function moveTaskDrag(taskId: string, dy: number, moveY: number) {
+    const session = dragSessionRef.current;
+    if (!session || session.taskId !== taskId) return;
+    session.latestDy = dy;
+    const { top, height, measured } = scrollViewportRef.current;
+    const edgeSize = 64;
+    const direction = measured && height > edgeSize * 2 && moveY < top + edgeSize ? -1 : measured && height > edgeSize * 2 && moveY > top + height - edgeSize ? 1 : 0;
+    startAutoScroll(direction);
+    updateDraggedTaskPosition(taskId, dy);
+  }
+  function finishTaskDrag(taskId: string) {
+    const session = dragSessionRef.current;
+    const finalOrder = dragOrderRef.current;
+    if (!session || !finalOrder || session.taskId !== taskId) return;
+    stopAutoScroll();
+    if (!session.baseOrder.every((id, index) => id === finalOrder[index])) onReorderTasks(finalOrder);
+    const finish = () => {
+      dragSessionRef.current = null;
+      dragOrderRef.current = null;
+      setDragOrder(null);
+      setDraggingTaskId(null);
+    };
+    if (reduceMotion) {
+      dragTranslateY.setValue(0);
+      finish();
+    } else {
+      Animated.spring(dragTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(finish);
+    }
+  }
+  function cancelTaskDrag(taskId: string) {
+    const session = dragSessionRef.current;
+    if (!session || session.taskId !== taskId) return;
+    stopAutoScroll();
+    dragTranslateY.stopAnimation();
+    dragTranslateY.setValue(0);
+    dragSessionRef.current = null;
+    dragOrderRef.current = null;
+    setDragOrder(null);
+    setDraggingTaskId(null);
+  }
+  function moveTaskByOne(task: DailyTask, direction: -1 | 1) {
+    const currentIndex = todayTaskIds.indexOf(task.id);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= todayTaskIds.length) return;
+    const orderedIds = [...todayTaskIds];
+    orderedIds.splice(currentIndex, 1);
+    orderedIds.splice(targetIndex, 0, task.id);
+    onReorderTasks(orderedIds, `${task.title} moved to position ${targetIndex + 1}`);
+  }
+  return <ScrollView ref={scrollRef} style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]} scrollEnabled={!draggingTaskId} scrollEventThrottle={16} onScroll={(event) => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} onLayout={(event) => { scrollViewportRef.current.height = event.nativeEvent.layout.height; }} onContentSizeChange={(_width, height) => { scrollContentHeightRef.current = height; }}>
     <Text style={s.eyebrow}>{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</Text>
     <Text style={s.title} accessibilityRole="header">One thing at a time.</Text>
     <Pressable style={s.capture} onPress={onCapture} accessibilityRole="button" accessibilityLabel="Capture a thought" accessibilityHint="Opens quick thought capture"><View style={s.plus} importantForAccessibility="no-hide-descendants"><Text style={s.plusText} allowFontScaling={false}>+</Text></View><View style={s.flex}><Text style={s.captureTitle}>What’s on your mind?</Text><Text style={s.captureSub}>Catch it now. Sort it later.</Text></View><Text style={s.arrow} allowFontScaling={false}>›</Text></Pressable>
@@ -1490,8 +1669,8 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onE
     {!!healthInsight && <Pressable style={s.healthInsight} onPress={onOpenHealth} accessibilityRole="button" accessibilityLabel={`Cycle estimate. ${healthInsight.message}`} accessibilityHint="Opens Health"><View style={s.healthInsightIcon} importantForAccessibility="no-hide-descendants"><MaterialIcons name="favorite-border" size={20} color={C.accentText} /></View><View style={s.flex}><Text style={s.cardTitle}>Cycle estimate</Text><Text style={s.healthInsightMessage}>{healthInsight.message}</Text><Text style={s.small}>{healthInsight.detail}</Text></View><Text style={s.chevron} allowFontScaling={false}>›</Text></Pressable>}
     <View style={s.taskHeading}><View style={s.flex}><Text style={s.eyebrow}>Today’s gentle list</Text><Text style={s.sectionTitle} accessibilityRole="header">{completed} of {todayTasks.length} complete</Text></View><CreationButton label="Goal +" accessibilityLabel="Add a goal" onPress={onAddTask} /></View>
     <View style={s.progressTrack} accessible={todayTasks.length > 0} importantForAccessibility={todayTasks.length ? "yes" : "no"} accessibilityRole={todayTasks.length ? "progressbar" : "none"} accessibilityLabel="Goals completed today" accessibilityValue={todayTasks.length ? { min: 0, max: todayTasks.length, now: completed, text: `${completed} of ${todayTasks.length}` } : undefined}><View style={[s.progressFill, { width: todayTasks.length ? `${Math.round(completed / todayTasks.length * 100)}%` : '0%' }]} /></View>
-    <Text style={s.swipeHint}>Tap to edit · swipe right to complete · left for tomorrow</Text>
-    <View style={s.taskList}>{todayTasks.length ? todayTasks.map((task) => <SwipeTaskRow key={task.id} task={task} today={today} onEdit={() => onEditTask(task)} onToggle={() => onToggleTask(task)} onToggleStep={(stepId) => onToggleTaskStep(task.id, stepId)} onPostpone={() => onPostponeTask(task)} />) : <Empty title="A clear day" body="Add one small goal when you’re ready." />}</View>
+    <Text style={s.swipeHint}>Tap to edit · hold the handle to reorder · swipe right to complete · left for tomorrow</Text>
+    <View style={s.taskList}>{todayTasks.length ? displayedTodayTasks.map((task, index) => <SwipeTaskRow key={task.id} task={task} today={today} position={index} taskCount={displayedTodayTasks.length} dragging={draggingTaskId === task.id} dragTranslateY={dragTranslateY} onRowLayout={(event) => rowHeightsRef.current.set(task.id, event.nativeEvent.layout.height)} onDragStart={() => beginTaskDrag(task.id)} onDragMove={(dy, moveY) => moveTaskDrag(task.id, dy, moveY)} onDragEnd={() => finishTaskDrag(task.id)} onDragCancel={() => cancelTaskDrag(task.id)} onMoveEarlier={index > 0 ? () => moveTaskByOne(task, -1) : undefined} onMoveLater={index < displayedTodayTasks.length - 1 ? () => moveTaskByOne(task, 1) : undefined} onEdit={() => onEditTask(task)} onToggle={() => onToggleTask(task)} onToggleStep={(stepId) => onToggleTaskStep(task.id, stepId)} onPostpone={() => onPostponeTask(task)} />) : <Empty title="A clear day" body="Add one small goal when you’re ready." />}</View>
     {!!tomorrowTasks.length && <View style={s.tomorrowBox}><Text style={s.tomorrowTitle} accessibilityRole="header">Waiting for tomorrow</Text>{tomorrowTasks.map((task) => <View style={s.tomorrowRow} key={`tomorrow-${task.id}`}><View style={[s.stressDot, { backgroundColor: taskColor(task.offsetCount, C) }]} importantForAccessibility="no" /><Pressable style={s.tomorrowEdit} onPress={() => onEditTask(task)} accessibilityRole="button" accessibilityLabel={`Edit ${task.title}, ${task.offsetCount > 0 ? taskMoveCountLabel(task) : `${taskRecurrenceName(task.recurrence)}, starts tomorrow`}`}><Text style={s.tomorrowText}>{task.title}</Text>{task.offsetCount > 0 ? <Text style={s.movedText}>{taskMoveCountLabel(task)}</Text> : <Text style={s.dailyBadge}>{taskRecurrenceName(task.recurrence)} · starts tomorrow</Text>}</Pressable>{task.offsetCount > 0 && <Pressable style={s.restoreButton} onPress={() => onRestoreTask(task)} accessibilityRole="button" accessibilityLabel={`Bring ${task.title} back to today`}><Text style={s.restoreText}>↶ Today</Text></Pressable>}</View>)}</View>}
     {!!scheduledAhead.length && <View style={[s.tomorrowBox, s.scheduledAheadBox]}><Text style={s.tomorrowTitle} accessibilityRole="header">Scheduled ahead</Text>{scheduledAhead.map((task) => <Pressable style={s.scheduledTaskRow} key={`scheduled-${task.id}`} onPress={() => onEditTask(task)} accessibilityRole="button" accessibilityLabel={`Edit ${task.title}, scheduled ${taskDate.format(localDateFromKey(task.scheduledFor))}`}><View style={s.scheduledDate}><Text style={s.scheduledDateText}>{taskDate.format(localDateFromKey(task.scheduledFor))}</Text></View><View style={s.flex}><Text style={s.scheduledTaskText}>{task.title}</Text><Text style={s.scheduledTaskMeta}>{taskRecurrenceName(task.recurrence)}</Text></View><Text style={s.scheduledChevron} allowFontScaling={false}>›</Text></Pressable>)}</View>}
     <View style={s.sectionAction}><View style={s.flex}><Text style={s.eyebrow}>Coming up</Text><Text style={s.sectionTitle} accessibilityRole="header">Your next appointment</Text></View><CreationButton label="Appointment +" accessibilityLabel="Add an appointment" onPress={onAddAppointment} /></View>
@@ -1687,7 +1866,89 @@ function taskMetaLabel(task: DailyTask) {
   return `${taskRecurrenceName(task.recurrence)} · ${task.offsetCount > 0 ? `moved ${task.offsetCount}/${limit}` : `up to ${limit} moves`}`;
 }
 
-function SwipeTaskRow({ task, today, onEdit, onToggle, onToggleStep, onPostpone }: { task: DailyTask; today: string; onEdit: () => void; onToggle: () => void; onToggleStep: (stepId: string) => void; onPostpone: () => void }) {
+type TaskDragHandleProps = {
+  task: DailyTask;
+  position: number;
+  taskCount: number;
+  onDragStart: () => void;
+  onDragMove: (dy: number, moveY: number) => void;
+  onDragEnd: () => void;
+  onDragCancel: () => void;
+  onMoveEarlier?: () => void;
+  onMoveLater?: () => void;
+};
+
+function TaskDragHandle({ task, position, taskCount, onDragStart, onDragMove, onDragEnd, onDragCancel, onMoveEarlier, onMoveLater }: TaskDragHandleProps) {
+  const { C, s } = useAppTheme();
+  const callbacksRef = useRef({ onDragStart, onDragMove, onDragEnd, onDragCancel });
+  callbacksRef.current = { onDragStart, onDragMove, onDragEnd, onDragCancel };
+  const activeRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function clearDragTimer() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+  useEffect(() => () => clearDragTimer(), []);
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      activeRef.current = false;
+      clearDragTimer();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        activeRef.current = true;
+        callbacksRef.current.onDragStart();
+      }, 350);
+    },
+    onPanResponderMove: (_event, gesture) => {
+      if (!activeRef.current && Math.hypot(gesture.dx, gesture.dy) > 8) clearDragTimer();
+      if (activeRef.current) callbacksRef.current.onDragMove(gesture.dy, gesture.moveY);
+    },
+    onPanResponderRelease: () => {
+      clearDragTimer();
+      if (activeRef.current) callbacksRef.current.onDragEnd();
+      activeRef.current = false;
+    },
+    onPanResponderTerminate: () => {
+      clearDragTimer();
+      if (activeRef.current) callbacksRef.current.onDragCancel();
+      activeRef.current = false;
+    },
+    onPanResponderTerminationRequest: () => !activeRef.current,
+  }), []);
+  const accessibilityActions = [
+    ...(onMoveEarlier ? [{ name: 'decrement' as const, label: 'Move earlier' }] : []),
+    ...(onMoveLater ? [{ name: 'increment' as const, label: 'Move later' }] : []),
+  ];
+  return <View style={s.taskDragHandle} {...panResponder.panHandlers} accessible accessibilityRole="adjustable" accessibilityLabel={`Reorder goal: ${task.title}`} accessibilityHint="Touch and hold, then drag. TalkBack actions can move it earlier or later." accessibilityValue={{ text: `Position ${position + 1} of ${taskCount}` }} accessibilityActions={accessibilityActions} onAccessibilityAction={(event) => {
+    if (event.nativeEvent.actionName === 'decrement') onMoveEarlier?.();
+    if (event.nativeEvent.actionName === 'increment') onMoveLater?.();
+  }}>
+    <MaterialIcons name="drag-handle" size={25} color={C.muted} importantForAccessibility="no-hide-descendants" />
+  </View>;
+}
+
+type SwipeTaskRowProps = {
+  task: DailyTask;
+  today: string;
+  position: number;
+  taskCount: number;
+  dragging: boolean;
+  dragTranslateY: Animated.Value;
+  onRowLayout: (event: LayoutChangeEvent) => void;
+  onDragStart: () => void;
+  onDragMove: (dy: number, moveY: number) => void;
+  onDragEnd: () => void;
+  onDragCancel: () => void;
+  onMoveEarlier?: () => void;
+  onMoveLater?: () => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onToggleStep: (stepId: string) => void;
+  onPostpone: () => void;
+};
+
+function SwipeTaskRow({ task, today, position, taskCount, dragging, dragTranslateY, onRowLayout, onDragStart, onDragMove, onDragEnd, onDragCancel, onMoveEarlier, onMoveLater, onEdit, onToggle, onToggleStep, onPostpone }: SwipeTaskRowProps) {
   const { C, s, reduceMotion } = useAppTheme();
   const translateX = useRef(new Animated.Value(0)).current;
   const [stepsExpanded, setStepsExpanded] = useState(false);
@@ -1741,7 +2002,8 @@ function SwipeTaskRow({ task, today, onEdit, onToggle, onToggleStep, onPostpone 
     onPanResponderTerminate: () => resetSwipe(),
   }), [cannotPostpone, onPostpone, onToggle, reduceMotion, translateX]);
 
-  return <View style={s.swipeShell}>
+  return <Animated.View onLayout={onRowLayout} style={[dragging && s.taskDragging, dragging && { transform: [{ translateY: dragTranslateY }] }]}>
+    <View style={s.swipeShell}>
     <View style={s.swipeUnder} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Text style={s.completeReveal}>{isDone ? '↶ Reopen' : '✓ Complete'}</Text><Text style={[s.tomorrowReveal, cannotPostpone && s.lockedReveal]}>{isDone ? 'Completed stays today' : task.recurrence === 'daily' ? 'Daily stays today' : !canPostponeTask(task) ? 'Move limit reached' : 'Tomorrow →'}</Text></View>
     <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
       <View style={[s.taskRow, { backgroundColor: isDone ? C.sagePale : taskColor(task.offsetCount, C) }]}>
@@ -1752,6 +2014,7 @@ function SwipeTaskRow({ task, today, onEdit, onToggle, onToggleStep, onPostpone 
             <Pressable style={s.taskEditTarget} onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit goal: ${task.title}${carryOverLabel ? `. ${carryOverLabel}` : ''}${metaLabel ? `. ${metaLabel}` : ''}`} accessibilityHint="Opens the goal editor" accessibilityActions={!cannotPostpone ? [{ name: 'moveToTomorrow', label: 'Move to tomorrow' }] : undefined} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'moveToTomorrow') onPostpone(); }}><Text style={[s.taskText, isDone && s.taskDone]}>{task.title}</Text><View style={s.taskMeta}>{!!carryOverLabel && <Text style={s.carryOverText}>{carryOverLabel}</Text>}{!!metaLabel && <Text style={task.recurrence === 'once' ? s.movedText : s.dailyBadge}>{metaLabel}</Text>}</View></Pressable>
           </View>
           {!canPostponeTask(task) && !isDone && <Text style={s.lockIcon} accessibilityLabel={task.recurrence === 'daily' ? 'Cannot be moved to tomorrow' : 'Move limit reached'} allowFontScaling={false}>◆</Text>}
+          {taskCount > 1 && <TaskDragHandle task={task} position={position} taskCount={taskCount} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onMoveEarlier={onMoveEarlier} onMoveLater={onMoveLater} />}
         </View>
         {hasSteps && <View style={s.taskStepsSection}>
           <Pressable disabled={isDone} style={({ pressed }) => [s.taskStepSummary, pressed && s.taskStepSummaryPressed]} onPress={toggleStepsExpanded} accessibilityRole="button" accessibilityState={{ expanded: stepsExpanded, disabled: isDone }} accessibilityLabel={isDone ? `${stepSummary.completed} of ${stepSummary.total} goal steps checked` : stepsExpanded ? `Hide ${stepSummary.total} goal steps` : `Show ${stepSummary.total} goal steps`} accessibilityHint={isDone ? undefined : 'Shows or hides the smaller steps below'}>
@@ -1769,7 +2032,8 @@ function SwipeTaskRow({ task, today, onEdit, onToggle, onToggleStep, onPostpone 
         </View>}
       </View>
     </Animated.View>
-  </View>;
+    </View>
+  </Animated.View>;
 }
 
 function ThoughtsView({ thoughts, onCapture, onEdit }: { thoughts: Thought[]; onCapture: () => void; onEdit: (thought: Thought) => void }) {
@@ -1924,7 +2188,7 @@ function calendarDayLabel(startsAt: string) {
   return relative === 'Today' || relative === 'Tomorrow' ? relative + ' · ' + formatted : formatted;
 }
 
-function AppointmentDetail({ appointment, thoughts, draft, onDraftChange, onDraftDiscard, onBack, onChange, onAddThought, onEditThought, onEdit, onDelete }: { appointment: Appointment; thoughts: Thought[]; draft?: Extract<EditorDraft, { kind: 'agenda' }>; onDraftChange: (draft: EditorDraft) => void; onDraftDiscard: () => void; onBack: () => void; onChange: (appointment: Appointment) => void; onAddThought: () => void; onEditThought: (thought: Thought) => void; onEdit: () => void; onDelete: () => void }) {
+function AppointmentDetail({ appointment, thoughts, draft, onDraftChange, onDraftDiscard, onBack, backLabel, onChange, onAddThought, onEditThought, onEdit, onDelete }: { appointment: Appointment; thoughts: Thought[]; draft?: Extract<EditorDraft, { kind: 'agenda' }>; onDraftChange: (draft: EditorDraft) => void; onDraftDiscard: () => void; onBack: () => void; backLabel: 'Today' | 'Appointments'; onChange: (appointment: Appointment) => void; onAddThought: () => void; onEditThought: (thought: Thought) => void; onEdit: () => void; onDelete: () => void }) {
   const { s } = useAppTheme();
   const { bottom } = useSafeAreaInsets();
   const headingRef = useRef<Text | null>(null);
@@ -1956,8 +2220,8 @@ function AppointmentDetail({ appointment, thoughts, draft, onDraftChange, onDraf
       } },
     ]);
   }
-  return <><ScrollView style={s.content} contentContainerStyle={[s.detailBody, { paddingBottom: 42 + bottom }]} keyboardShouldPersistTaps="handled">
-    <Pressable style={s.backButton} onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to appointments"><Text style={s.back}>‹ Appointments</Text></Pressable>
+  return <><ScrollView style={s.content} contentContainerStyle={[s.detailBody, { paddingBottom: 112 + bottom }]} keyboardShouldPersistTaps="handled">
+    <Pressable style={s.backButton} onPress={onBack} accessibilityRole="button" accessibilityLabel={`Back to ${backLabel}`}><Text style={s.back}>‹ {backLabel}</Text></Pressable>
     <View style={s.hero}><Text style={s.heroEyebrow}>{describeCountdown(appointment.startsAt)}</Text><Text ref={headingRef} style={s.heroTitle} accessibilityRole="header">{appointment.title}</Text><Text style={s.heroFact}>{fullDate.format(new Date(appointment.startsAt))}</Text>{!!appointment.location && <Text style={s.heroFact} accessibilityLabel={`Place or person: ${appointment.location}`}>⌖  {appointment.location}</Text>}<View style={s.reminderPill}><Text style={s.reminderPillText}>{appointment.notificationId ? `Reminder set · ${reminderLabel(appointment.reminderMinutes)} before` : 'Reminder off'}</Text></View></View>
     <Section eyebrow="Prepare your way" title="Appointment plan" />
     <Text style={s.planIntro}>Questions, decisions, documents, things to bring, errands, or follow-ups—keep whatever helps you feel prepared.</Text>
@@ -2422,7 +2686,9 @@ function CalendarNavIcon({ active }: { active: boolean }) {
 function NavButton({ label, symbol, icon, active, onPress }: { label: string; symbol?: string; icon?: 'calendar' | 'health'; active: boolean; onPress: () => void }) {
   const { C, s } = useAppTheme();
   return <Pressable style={s.navButton} onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={label}>
-    {icon === 'calendar' ? <CalendarNavIcon active={active} /> : icon === 'health' ? <MaterialIcons name="favorite-border" size={24} color={active ? C.accentText : C.muted} importantForAccessibility="no" /> : <Text style={[s.navSymbol, active && s.navActive]} allowFontScaling={false}>{symbol}</Text>}
+    <View style={[s.navIconState, active && s.navIconStateActive]} importantForAccessibility="no-hide-descendants">
+      {icon === 'calendar' ? <CalendarNavIcon active={active} /> : icon === 'health' ? <MaterialIcons name={active ? "favorite" : "favorite-border"} size={24} color={active ? C.accentText : C.muted} /> : <Text style={[s.navSymbol, active && s.navActive]} allowFontScaling={false}>{symbol}</Text>}
+    </View>
     <Text style={[s.navLabel, active && s.navActive]}>{label}</Text>
   </Pressable>;
 }
@@ -2436,14 +2702,14 @@ function makeStyles(C: ThemeColors) { return StyleSheet.create({
   capture: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 18, borderRadius: 23, backgroundColor: C.accentSolid, marginTop: 22, marginBottom: 8 }, plus: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.sagePale, alignItems: 'center', justifyContent: 'center' }, plusText: { color: C.accentText, fontSize: 28 }, captureTitle: { color: C.white, fontWeight: '700', fontSize: 17 }, captureSub: { color: '#FFFFFFD1', marginTop: 3, fontSize: 13 }, arrow: { color: C.white, fontSize: 30 },
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: C.yellow, borderRadius: 17, marginTop: 10 }, smallPrimary: { minHeight: 48, justifyContent: 'center', backgroundColor: C.accentSolid, paddingHorizontal: 13, borderRadius: 11 }, smallPrimaryText: { color: C.white, fontWeight: '700', fontSize: 12 }, healthInsight: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 10 }, healthInsightIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: C.card }, healthInsightMessage: { color: C.ink, fontSize: 13, lineHeight: 19, fontWeight: '700', marginTop: 2, marginBottom: 3 }, section: { marginTop: 30, marginBottom: 12 }, sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 12 }, sectionTitle: { color: C.ink, fontSize: 19, fontWeight: '700' }, creationButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: C.accentSolid }, creationButtonText: { color: C.white, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   taskHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 10 }, progressTrack: { height: 8, overflow: 'hidden', borderRadius: 4, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, progressFill: { height: '100%', borderRadius: 3, backgroundColor: C.accentSolid }, swipeHint: { color: C.muted, fontSize: 10, textAlign: 'center', marginVertical: 9 }, taskList: { gap: 8 },
-  swipeShell: { overflow: 'hidden', borderRadius: 16, backgroundColor: C.accentSolid }, swipeUnder: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }, completeReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, tomorrowReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, lockedReveal: { color: C.sagePale }, taskRow: { minHeight: 72, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: C.line }, taskMainRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, taskCheckTarget: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, taskCheck: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadge: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadgeText: { color: C.accentText, fontSize: 9, fontWeight: '900' }, taskCheckDone: { borderColor: C.accentText, backgroundColor: C.accentSolid }, taskCheckText: { color: C.white, fontWeight: '900' }, taskEditTarget: { minHeight: 48, justifyContent: 'center' }, taskText: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19 }, taskDone: { color: C.muted, textDecorationLine: 'line-through' }, taskMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 4 }, carryOverText: { color: C.ink, fontSize: 10, fontWeight: '700' }, dailyBadge: { color: C.ink, fontSize: 10, fontWeight: '800' }, movedText: { color: C.moved, fontSize: 10, fontWeight: '800' }, lockIcon: { color: C.ink, fontSize: 11 },
+  swipeShell: { overflow: 'hidden', borderRadius: 16, backgroundColor: C.accentSolid }, swipeUnder: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }, completeReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, tomorrowReveal: { color: C.white, fontSize: 11, fontWeight: '800' }, lockedReveal: { color: C.sagePale }, taskDragging: { zIndex: 10, elevation: 8, borderRadius: 16, backgroundColor: C.card }, taskRow: { minHeight: 72, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: C.line }, taskMainRow: { flexDirection: 'row', alignItems: 'center', gap: 6 }, taskCheckTarget: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, taskCheck: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadge: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1.5, borderColor: C.accentText, backgroundColor: C.card }, taskProgressBadgeText: { color: C.accentText, fontSize: 9, fontWeight: '900' }, taskCheckDone: { borderColor: C.accentText, backgroundColor: C.accentSolid }, taskCheckText: { color: C.white, fontWeight: '900' }, taskEditTarget: { minHeight: 48, justifyContent: 'center' }, taskText: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19 }, taskDone: { color: C.muted, textDecorationLine: 'line-through' }, taskMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 4 }, carryOverText: { color: C.ink, fontSize: 10, fontWeight: '700' }, dailyBadge: { color: C.ink, fontSize: 10, fontWeight: '800' }, movedText: { color: C.moved, fontSize: 10, fontWeight: '800' }, lockIcon: { color: C.ink, fontSize: 11 }, taskDragHandle: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', marginRight: -5 },
   taskStepsSection: { marginTop: 4, marginLeft: 56 }, taskStepSummary: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 2, borderRadius: 10, overflow: 'hidden' }, taskStepSummaryPressed: { backgroundColor: C.sagePale }, taskStepProgressTrack: { width: 34, height: 6, overflow: 'hidden', borderRadius: 3, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskStepProgressFill: { height: '100%', borderRadius: 2, backgroundColor: C.ink }, taskStepSummaryText: { flex: 1, color: C.ink, fontSize: 10, fontWeight: '700' }, taskStepDisclosure: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, taskStepsList: { gap: 5, paddingTop: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line }, taskStepRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4 }, taskStepCheck: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.3, borderColor: C.sage, backgroundColor: C.card }, taskStepCheckDone: { borderColor: C.accentText, backgroundColor: C.accentSolid }, taskStepCheckText: { color: C.white, fontSize: 11, fontWeight: '900' }, taskStepText: { flex: 1, color: C.ink, fontSize: 12, lineHeight: 17, fontWeight: '600' }, taskStepTextDone: { color: C.ink, textDecorationLine: 'line-through' },
   tomorrowBox: { marginTop: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line }, tomorrowTitle: { color: C.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 9 }, tomorrowRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }, tomorrowEdit: { flex: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 4 }, stressDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: '#00000010' }, tomorrowText: { color: C.ink, fontSize: 13, fontWeight: '600' }, restoreButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: C.sagePale }, restoreText: { color: C.accentText, fontSize: 10, fontWeight: '800' }, scheduledAheadBox: { borderColor: `${C.line}99` }, scheduledTaskRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }, scheduledDate: { minWidth: 78, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: C.line }, scheduledDateText: { color: C.muted, fontSize: 10, fontWeight: '800', textAlign: 'center' }, scheduledTaskText: { color: C.muted, fontSize: 13, fontWeight: '600' }, scheduledTaskMeta: { color: C.muted, fontSize: 10, fontWeight: '700' }, scheduledChevron: { color: C.muted, fontSize: 23, opacity: .65 },
   appointmentCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, dateBlock: { width: 64, height: 68, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sagePale }, dateMonth: { color: C.accentText, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' }, dateDay: { color: C.accentText, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 29, fontWeight: '600' }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: '700', marginBottom: 3 }, small: { color: C.muted, fontSize: 12, lineHeight: 17 }, reminderLine: { color: C.accentText, fontSize: 11, fontWeight: '600', marginTop: 7 }, chevron: { color: C.muted, fontSize: 28 },
   healthCard: { padding: 18, borderRadius: 22, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 14 }, healthCardCopy: { color: C.muted, fontSize: 13, lineHeight: 19, marginTop: 5 }, healthRatingGroup: { marginTop: 20 }, healthRatingTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 9 }, healthRatingOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, healthRatingOption: { width: '31%', minHeight: 64, flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, paddingVertical: 8, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, healthRatingOptionSelected: { borderColor: C.accentText, backgroundColor: C.accentSolid }, healthRatingNumber: { color: C.accentText, fontSize: 17, fontWeight: '900' }, healthRatingLabel: { color: C.muted, fontSize: 10, lineHeight: 14, fontWeight: '700', textAlign: 'center', marginTop: 2 }, healthRatingTextSelected: { color: C.white }, healthDateButton: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper, marginTop: 15 }, healthForecast: { padding: 14, borderRadius: 14, backgroundColor: C.sagePale, marginTop: 14 }, healthForecastText: { color: C.ink, fontSize: 13, lineHeight: 19, marginTop: 3 }, healthHistorySection: { marginTop: 18 }, healthHistoryTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 5 }, healthPeriodBlock: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }, healthHistoryRow: { minHeight: 64, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }, healthHistoryContent: { flex: 1, minWidth: 130, paddingVertical: 9 }, healthHistoryDate: { color: C.ink, fontSize: 12, lineHeight: 18, fontWeight: '700' }, healthHistoryMeta: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 2 }, healthHistoryActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }, healthHistoryButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 }, healthHistoryButtonText: { color: C.accentText, fontSize: 11, fontWeight: '800' }, healthRemoveButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 }, healthRemoveText: { color: C.danger, fontSize: 11, fontWeight: '800' }, healthEndEditor: { padding: 13, borderRadius: 14, backgroundColor: C.sagePale, marginBottom: 12 }, healthEndActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }, healthEndSaveButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 11, backgroundColor: C.accentSolid }, healthEndSaveText: { color: C.white, fontSize: 11, fontWeight: '800' }, healthEndClearButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10 }, healthCheckInDate: { color: C.ink, fontSize: 12, lineHeight: 18, fontWeight: '700' }, healthCheckInRow: { paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, gap: 2 }, healthClearButton: { flex: 0, marginTop: 4 },
   empty: { padding: 22, alignItems: 'center', gap: 3, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line, backgroundColor: C.card }, thread: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 9 }, threadMain: { flex: 1, minWidth: 0, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 3 }, threadDot: { width: 10, height: 10, borderRadius: 5 }, threadText: { color: C.ink, fontSize: 14, fontWeight: '600', lineHeight: 19 }, threadChevron: { color: C.muted, fontSize: 23 }, threadExplore: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 11, backgroundColor: C.sagePale }, threadExploreText: { color: C.accentText, fontSize: 10, fontWeight: '800' }, tags: { color: C.muted, fontSize: 11, marginTop: 3 },
   thoughtCreate: { alignSelf: 'flex-start', marginBottom: 12 }, searchField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 14 }, searchInput: { flex: 1, minWidth: 0, minHeight: 48, paddingVertical: 10, color: C.ink, fontSize: 15 }, searchHint: { color: C.muted, fontSize: 11, fontWeight: '700', marginTop: 12, marginBottom: 7 }, thoughtListHeading: { marginTop: 22, marginBottom: 10 }, thoughtList: { marginTop: 10 }, connectionToggle: { flex: 0, marginTop: 4 }, cloudCard: { padding: 14, backgroundColor: C.card, borderRadius: 22, borderWidth: 1, borderColor: C.line, marginTop: 15, overflow: 'hidden' }, cloudEmpty: { marginTop: 14 }, connectionFocus: { color: C.ink, fontSize: 14, fontWeight: '700', lineHeight: 19, marginTop: 2 }, textButton: { minHeight: 48, justifyContent: 'center' }, link: { color: C.accentText, fontSize: 12, fontWeight: '700', padding: 8 }, mindMap: { height: MIND_MAP_HEIGHT, position: 'relative', marginTop: 6 }, largeTextMapFallback: { gap: 12, paddingVertical: 18 }, largeTextMapButton: { flex: 0 }, connectionLine: { position: 'absolute', height: 2, borderRadius: 2, backgroundColor: C.sage }, focusBubble: { position: 'absolute', width: FOCUS_BUBBLE_SIZE, height: FOCUS_BUBBLE_SIZE, borderRadius: FOCUS_BUBBLE_SIZE / 2, padding: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, borderWidth: 4, borderColor: C.sagePale, elevation: 4 }, focusLabel: { color: C.white, fontSize: 8, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }, focusBubbleText: { color: C.white, fontSize: 12, lineHeight: 16, fontWeight: '800', textAlign: 'center' }, relationBubble: { position: 'absolute', width: RELATION_BUBBLE_SIZE, height: RELATION_BUBBLE_SIZE, borderRadius: RELATION_BUBBLE_SIZE / 2, padding: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.card, elevation: 2 }, relationBubbleText: { color: C.ink, fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' }, relationBubbleReason: { color: C.accentText, fontSize: 7, lineHeight: 9, fontWeight: '900', textAlign: 'center', marginTop: 3 }, noConnections: { position: 'absolute', left: 44, right: 44, bottom: 50, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 13, backgroundColor: C.paper, borderWidth: 1, borderColor: C.line }, noConnectionsText: { color: C.muted, fontSize: 10, fontWeight: '700', textAlign: 'center' }, mapHint: { position: 'absolute', left: 0, right: 0, bottom: 1, color: C.muted, fontSize: 8, fontWeight: '700', textAlign: 'center' },
-  scheduleAction: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: C.accentSolid, paddingHorizontal: 18 }, scheduleActionText: { color: C.white, fontSize: 14, fontWeight: '800' }, calendarList: { gap: 22, marginTop: 26 }, calendarDay: { gap: 10 }, calendarDayHeader: { flexDirection: 'row', alignItems: 'center', gap: 9 }, calendarDayDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.sage }, calendarDayLabel: { color: C.accentText, fontSize: 12, fontWeight: '800' }, calendarDayCards: { gap: 10, paddingLeft: 13, borderLeftWidth: 1, borderLeftColor: C.line }, nav: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.card, paddingBottom: Platform.OS === 'ios' ? 12 : 4 }, navButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 }, navSymbol: { color: C.muted, fontSize: 23 }, navLabel: { color: C.muted, fontSize: 10, fontWeight: '600' }, navActive: { color: C.accentText, fontWeight: '800' }, calendarNavIcon: { width: 26, height: 24, transform: [{ rotate: '-2deg' }] }, calendarNavPage: { position: 'absolute', left: 2, top: 4, width: 22, height: 19, overflow: 'hidden', borderWidth: 1.7, borderRadius: 6, backgroundColor: C.card }, calendarNavPageActive: { backgroundColor: C.sagePale }, calendarNavRing: { position: 'absolute', top: 1, width: 2.5, height: 8, borderRadius: 2 }, calendarNavRingLeft: { left: 7 }, calendarNavRingRight: { right: 7 }, calendarNavDivider: { position: 'absolute', left: 0, right: 0, top: 5, height: 1.5, opacity: .72 }, calendarNavDateLarge: { position: 'absolute', left: 5, top: 10, width: 6, height: 4, borderRadius: 3 }, calendarNavDateSmall: { position: 'absolute', left: 13, top: 10, width: 3.5, height: 4, borderRadius: 2, opacity: .55 },
+  scheduleAction: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: C.accentSolid, paddingHorizontal: 18 }, scheduleActionText: { color: C.white, fontSize: 14, fontWeight: '800' }, calendarList: { gap: 22, marginTop: 26 }, calendarDay: { gap: 10 }, calendarDayHeader: { flexDirection: 'row', alignItems: 'center', gap: 9 }, calendarDayDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.sage }, calendarDayLabel: { color: C.accentText, fontSize: 12, fontWeight: '800' }, calendarDayCards: { gap: 10, paddingLeft: 13, borderLeftWidth: 1, borderLeftColor: C.line }, nav: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.card, paddingBottom: Platform.OS === 'ios' ? 12 : 4 }, navButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1 }, navIconState: { minWidth: 48, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }, navIconStateActive: { backgroundColor: C.sagePale }, navSymbol: { color: C.muted, fontSize: 23 }, navLabel: { color: C.muted, fontSize: 10, fontWeight: '600' }, navActive: { color: C.accentText, fontWeight: '800' }, calendarNavIcon: { width: 26, height: 24, transform: [{ rotate: '-2deg' }] }, calendarNavPage: { position: 'absolute', left: 2, top: 4, width: 22, height: 19, overflow: 'hidden', borderWidth: 1.7, borderRadius: 6, backgroundColor: C.card }, calendarNavPageActive: { backgroundColor: C.sagePale }, calendarNavRing: { position: 'absolute', top: 1, width: 2.5, height: 8, borderRadius: 2 }, calendarNavRingLeft: { left: 7 }, calendarNavRingRight: { right: 7 }, calendarNavDivider: { position: 'absolute', left: 0, right: 0, top: 5, height: 1.5, opacity: .72 }, calendarNavDateLarge: { position: 'absolute', left: 5, top: 10, width: 6, height: 4, borderRadius: 3 }, calendarNavDateSmall: { position: 'absolute', left: 13, top: 10, width: 3.5, height: 4, borderRadius: 2, opacity: .55 },
   backButton: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start', marginBottom: 16 }, back: { color: C.accentText, fontWeight: '700', fontSize: 14 }, hero: { backgroundColor: C.accentSolid, borderRadius: 23, padding: 22 }, heroEyebrow: { color: C.white, textTransform: 'uppercase', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }, heroTitle: { color: C.white, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 31, fontWeight: '600', marginTop: 6, marginBottom: 15 }, heroFact: { color: '#FFFFFFD1', fontSize: 14, marginBottom: 7 }, reminderPill: { alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 20, backgroundColor: C.sagePale }, reminderPillText: { color: C.accentText, fontSize: 11, fontWeight: '700' },
   planIntro: { color: C.muted, fontSize: 13, lineHeight: 19, marginTop: -4, marginBottom: 13 }, agenda: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, marginBottom: 8 }, agendaContent: { flex: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 2 }, checkboxTarget: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: C.sage, alignItems: 'center', justifyContent: 'center' }, checkboxDone: { backgroundColor: C.accentSolid, borderColor: C.accentText }, check: { color: C.white, fontWeight: '800' }, agendaText: { color: C.ink, fontSize: 14, lineHeight: 20 }, editHint: { color: C.muted, fontSize: 10, marginTop: 3 }, done: { color: C.muted, textDecorationLine: 'line-through' }, planAddButton: { flex: 0, marginTop: 5 }, linked: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, backgroundColor: C.peach, marginBottom: 8 }, detailActions: { flexDirection: 'row', gap: 9, marginTop: 28 },
   secondary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 14 }, secondaryText: { color: C.accentText, fontWeight: '700', fontSize: 13 }, dangerButton: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.dangerLine, backgroundColor: C.card }, dangerText: { color: C.danger, fontWeight: '700' }, modalDanger: { flex: 0, marginTop: 10 }, modalCopy: { color: C.muted, fontSize: 13, lineHeight: 19 }, confirmPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginBottom: 14 }, confirmDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: '#00000012' }, confirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 }, confirmPrimary: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, paddingHorizontal: 14 },

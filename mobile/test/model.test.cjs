@@ -20,8 +20,10 @@ const {
   groupUpcomingAppointments,
   localDateKey,
   nextTaskOccurrence,
+  nextTaskSortOrder,
   relatedThoughts,
   removeLegacySeedData,
+  reorderTasks,
   searchThoughts,
   suggestedAppointments,
   suggestedTags,
@@ -44,6 +46,7 @@ const today = '2026-08-18';
 const baseTask = {
   id: 'task',
   title: 'A goal',
+  sortOrder: 0,
   scheduledFor: today,
   completedOn: null,
   recurrence: 'once',
@@ -55,7 +58,7 @@ const baseTask = {
 
 test('new installations start with no demo or personal data', () => {
   assert.deepEqual(createEmptyState(), {
-    version: 6,
+    version: 7,
     thoughts: [],
     appointments: [],
     tasks: [],
@@ -70,11 +73,27 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const legacy = { version: 1, thoughts: [{ id: 'legacy' }], appointments: [] };
   assert.deepEqual(parseStoredState(JSON.stringify(legacy), 'test storage'), {
-    version: 6,
+    version: 7,
     thoughts: [{ id: 'legacy' }],
     appointments: [],
     tasks: [],
     health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
+  });
+
+  const versionSixTask = { ...baseTask };
+  delete versionSixTask.sortOrder;
+  const secondVersionSixTask = { ...versionSixTask, id: 'second' };
+  const versionSix = {
+    version: 6,
+    thoughts: [],
+    appointments: [],
+    tasks: [versionSixTask, secondVersionSixTask],
+    health: { enabled: false, cycleTrackingEnabled: false, checkIns: [], periods: [] },
+  };
+  assert.deepEqual(parseStoredState(JSON.stringify(versionSix), 'test storage'), {
+    ...versionSix,
+    version: 7,
+    tasks: [baseTask, { ...baseTask, id: 'second', sortOrder: 1024 }],
   });
 
   const versionFive = {
@@ -85,7 +104,7 @@ test('encrypted storage keeps current state and migrates the previous state shap
     health: { enabled: true, checkIns: [{ date: today, mood: 3, sleep: null }], cycleStarts: ['2026-08-18', '2026-07-20'] },
   };
   assert.deepEqual(parseStoredState(JSON.stringify(versionFive), 'test storage'), {
-    version: 6,
+    version: 7,
     thoughts: [],
     appointments: [],
     tasks: [],
@@ -100,7 +119,7 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const versionFour = { version: 4, thoughts: [], appointments: [], tasks: [baseTask] };
   assert.deepEqual(parseStoredState(JSON.stringify(versionFour), 'test storage'), {
-    version: 6,
+    version: 7,
     thoughts: [],
     appointments: [],
     tasks: [baseTask],
@@ -115,7 +134,7 @@ test('encrypted storage keeps current state and migrates the previous state shap
   };
   delete versionThree.tasks[0].steps;
   assert.deepEqual(parseStoredState(JSON.stringify(versionThree), 'test storage'), {
-    version: 6,
+    version: 7,
     thoughts: [],
     appointments: [],
     tasks: [baseTask],
@@ -132,8 +151,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
     ],
   };
   assert.deepEqual(parseStoredState(JSON.stringify(versionTwo), 'test storage').tasks, [
-    { id: 'once', title: 'Once', scheduledFor: today, completedOn: null, offsetCount: 1, createdAt: 'now', recurrence: 'once', recurrenceAnchor: today, steps: [] },
-    { id: 'daily', title: 'Daily', scheduledFor: today, completedOn: null, offsetCount: 0, createdAt: 'now', recurrence: 'daily', recurrenceAnchor: today, steps: [] },
+    { id: 'once', title: 'Once', sortOrder: 0, scheduledFor: today, completedOn: null, offsetCount: 1, createdAt: 'now', recurrence: 'once', recurrenceAnchor: today, steps: [] },
+    { id: 'daily', title: 'Daily', sortOrder: 1024, scheduledFor: today, completedOn: null, offsetCount: 0, createdAt: 'now', recurrence: 'daily', recurrenceAnchor: today, steps: [] },
   ]);
 });
 
@@ -431,10 +450,24 @@ test('postponed goals leave today and appear in tomorrow preview', () => {
 });
 
 test('today goals keep their saved order after completion and postponement changes', () => {
-  const calm = { ...baseTask, id: 'calm' };
-  const moved = { ...baseTask, id: 'moved', offsetCount: 3 };
-  const completed = { ...baseTask, id: 'completed', completedOn: today };
-  assert.deepEqual(tasksForToday([calm, moved, completed], today).map((task) => task.id), ['calm', 'moved', 'completed']);
+  const calm = { ...baseTask, id: 'calm', sortOrder: 0 };
+  const moved = { ...baseTask, id: 'moved', sortOrder: 1024, offsetCount: 3 };
+  const completed = { ...baseTask, id: 'completed', sortOrder: 2048, completedOn: today };
+  assert.deepEqual(tasksForToday([completed, calm, moved], today).map((task) => task.id), ['calm', 'moved', 'completed']);
+});
+
+test('manual goal order persists for recurring routines without disturbing hidden goal slots', () => {
+  const morning = { ...baseTask, id: 'morning', title: 'Morning routine', recurrence: 'daily', sortOrder: 0 };
+  const future = { ...baseTask, id: 'future', scheduledFor: '2026-08-25', sortOrder: 1024 };
+  const evening = { ...baseTask, id: 'evening', title: 'Evening routine', recurrence: 'daily', sortOrder: 2048 };
+  const reordered = reorderTasks([evening, future, morning], ['evening', 'morning']);
+
+  assert.deepEqual(reordered.map((task) => task.id), ['evening', 'future', 'morning']);
+  assert.deepEqual(tasksForToday(reordered, today).map((task) => task.id), ['evening', 'morning']);
+  assert.deepEqual(tasksForToday(reordered, '2026-08-26').map((task) => task.id), ['evening', 'future', 'morning']);
+  assert.equal(nextTaskSortOrder(reordered), 3072);
+  assert.equal(reorderTasks(reordered, ['evening', 'morning']), reordered);
+  assert.equal(reorderTasks(reordered, ['morning', 'missing']), reordered);
 });
 
 const thought = (id, text, tags = [], createdAt = '2026-08-18T08:00:00.000Z') => ({
@@ -448,6 +481,7 @@ test('a thought becomes a one-off goal today while retaining its source link', (
   assert.deepEqual({ ...goal, id: 'stable' }, {
     id: 'stable',
     title: 'Call the clinic',
+    sortOrder: new Date('2026-08-18T09:30:00.000Z').getTime(),
     scheduledFor: today,
     completedOn: null,
     recurrence: 'once',

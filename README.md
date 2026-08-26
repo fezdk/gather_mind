@@ -29,6 +29,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Keep daily essentials on Today without deferral; weekly and monthly occurrences can be moved at most 2 or 5 times respectively.
 - Keep unfinished goals visible with calm labels such as `Planned yesterday`, while explicitly deferred goals retain their `Moved ×` history.
 - Complete, reopen, defer, or restore goals with stable swipe behavior and a temporary Undo action.
+- Hold a goal's reorder handle to place routines and other goals in a preferred order; daily, weekly, and monthly goals keep that relative position when they reappear.
 - Optionally break a goal into one level of smaller steps, check them directly from Today, and complete the parent automatically with Undo when the last step is checked.
 - Preserve step progress while an occurrence is carried over or moved, then reset it for each new daily, weekly, or monthly occurrence.
 - See future goals under quieter Tomorrow and **Scheduled ahead** sections until their planned day.
@@ -59,7 +60,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Optionally lock the app with strong device biometrics after an immediate, 1, 5, or 15 minute timeout. Unlock starts automatically when the locked app becomes active, with a manual retry after cancellation. The lock remains separate from the database key so biometric enrollment changes do not destroy the only key copy.
 - Preserve unfinished editor drafts across a short app switch or an app-lock timeout.
 - Follow the phone's appearance or use a fixed Light or Dark mode.
-- Support TalkBack with named controls, form labels, selection and checkbox states, modal focus, live Undo/result announcements, and a non-gesture move-to-tomorrow action.
+- Support TalkBack with named controls, form labels, selection and checkbox states, modal focus, live Undo/result announcements, and non-gesture actions for moving goals to tomorrow or earlier/later in the list.
 - Keep interactive targets at least 48 dp, preserve 4.5:1 normal-text contrast on shared surfaces and move colours, follow reduced-motion settings, and replace the geometric thought map at large font sizes.
 - Disable Android cloud backup and provide an in-app control that deletes all local content and cancels scheduled notifications.
 - Keep the widget’s bounded local summary encrypted separately with Android Keystore and remove it with **Delete all local data**; the widget adds no account, network request, or Internet permission.

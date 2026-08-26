@@ -58,6 +58,7 @@ export type TaskStepProgress = {
 export type DailyTask = {
   id: string;
   title: string;
+  sortOrder: number;
   scheduledFor: string;
   completedOn: string | null;
   recurrence: TaskRecurrence;
@@ -81,7 +82,7 @@ export type EditorDraft =
   | { kind: 'agenda'; appointmentId: string; itemId: string | null; text: string };
 
 export type AppState = {
-  version: 6;
+  version: 7;
   thoughts: Thought[];
   appointments: Appointment[];
   tasks: DailyTask[];
@@ -101,13 +102,14 @@ export function createEmptyHealthState(): HealthState {
 }
 
 export function createEmptyState(): AppState {
-  return { version: 6, thoughts: [], appointments: [], tasks: [], health: createEmptyHealthState() };
+  return { version: 7, thoughts: [], appointments: [], tasks: [], health: createEmptyHealthState() };
 }
 
 export function createGoalFromThought(thought: Thought, today = localDateKey(), now = new Date()): DailyTask {
   return {
     id: makeId('task'),
     title: thought.text.trim(),
+    sortOrder: now.getTime(),
     scheduledFor: today,
     completedOn: null,
     recurrence: 'once',
@@ -125,6 +127,7 @@ export function createTask(title: string, recurrence: TaskRecurrence, firstOccur
   return {
     id: makeId('task'),
     title,
+    sortOrder: now.getTime(),
     scheduledFor,
     completedOn: null,
     recurrence,
@@ -534,21 +537,52 @@ export function toggleTaskCompletion(task: DailyTask, today = localDateKey()): D
 export function tasksForToday(tasks: DailyTask[], today = localDateKey()) {
   return tasks.filter((task) => task.completedOn === today
     || (task.recurrence === 'daily' && task.scheduledFor <= today)
-    || ((task.recurrence === 'weekly' || task.recurrence === 'monthly' || !task.completedOn) && task.scheduledFor <= today));
+    || ((task.recurrence === 'weekly' || task.recurrence === 'monthly' || !task.completedOn) && task.scheduledFor <= today))
+    .sort(compareTaskOrder);
 }
 
 export function tasksForTomorrow(tasks: DailyTask[], today = localDateKey()) {
   const tomorrow = dateKeyAfter(today, 1);
   return tasks.filter((task) => task.completedOn !== today
     && (task.recurrence === 'daily' || task.recurrence === 'weekly' || task.recurrence === 'monthly' || !task.completedOn)
-    && task.scheduledFor === tomorrow);
+    && task.scheduledFor === tomorrow)
+    .sort(compareTaskOrder);
 }
 
 export function tasksScheduledAhead(tasks: DailyTask[], today = localDateKey()) {
   const tomorrow = dateKeyAfter(today, 1);
   return tasks.filter((task) => task.completedOn !== today
     && task.scheduledFor > tomorrow)
-    .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || compareTaskOrder(a, b));
+}
+
+const TASK_ORDER_SPACING = 1024;
+
+function compareTaskOrder(a: DailyTask, b: DailyTask) {
+  return a.sortOrder - b.sortOrder || Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id);
+}
+
+export function nextTaskSortOrder(tasks: DailyTask[]) {
+  if (!tasks.length) return 0;
+  return Math.max(...tasks.map((task) => task.sortOrder)) + TASK_ORDER_SPACING;
+}
+
+export function reorderTasks(tasks: DailyTask[], orderedVisibleIds: string[]) {
+  if (orderedVisibleIds.length < 2 || new Set(orderedVisibleIds).size !== orderedVisibleIds.length) return tasks;
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  if (orderedVisibleIds.some((id) => !taskById.has(id))) return tasks;
+
+  const visibleIds = new Set(orderedVisibleIds);
+  const globallyOrdered = [...tasks].sort(compareTaskOrder);
+  const currentVisibleIds = globallyOrdered.filter((task) => visibleIds.has(task.id)).map((task) => task.id);
+  if (currentVisibleIds.length !== orderedVisibleIds.length
+    || currentVisibleIds.every((id, index) => id === orderedVisibleIds[index])) return tasks;
+
+  let visibleIndex = 0;
+  return globallyOrdered.map((task, index) => {
+    const orderedTask = visibleIds.has(task.id) ? taskById.get(orderedVisibleIds[visibleIndex++])! : task;
+    return { ...orderedTask, sortOrder: index * TASK_ORDER_SPACING };
+  });
 }
 
 export function describeCountdown(isoDate: string, now = new Date()) {

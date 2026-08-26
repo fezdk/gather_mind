@@ -4,6 +4,12 @@ All notable Gather Mind changes are documented here.
 
 ## Unreleased
 
+- Added persistent manual ordering for Today goals: hold the dedicated handle and drag a goal into place, including recurring morning/evening routines that keep their relative position on later days.
+- Kept horizontal complete/defer swipes separate from the reorder handle, and exposed equivalent TalkBack move-earlier/move-later actions with position feedback.
+- Migrated existing encrypted goals to explicit stable sort positions while preserving their previous saved order.
+- Kept the bottom tabs available while viewing an appointment, with tab changes leaving the detail view and the back label preserving whether it was opened from Today or Appointments.
+- Gave every active bottom-tab icon the same calm pill highlight, and filled the Health heart while Health is selected.
+
 ## 0.6.1 — 2026-08-25
 
 - Added optional, default-off **Health tracking** that reveals a private Health tab with immediate on-device 1–5 mood and sleep-quality check-ins.

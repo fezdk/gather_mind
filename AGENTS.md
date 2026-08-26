@@ -51,6 +51,7 @@ Physical-device release checks should cover:
 - theme autocomplete and thought search filtering;
 - notification denial/approval and a real reminder delivered while the app is closed;
 - daily rollover, future-dated one-offs without false move history, daily non-deferrable goals, move-to-tomorrow confirmation, and distress colors;
+- Today goal reordering by hold-and-drag: variable-height/expanded rows, scrolling a longer list, coexistence with horizontal swipe, persistence across restart and recurring occurrences, and TalkBack move-earlier/move-later actions;
 - one-level goal-step creation/edit/removal, blur-save without saving unrelated parent edits, Today expansion/collapse, last-step auto-completion plus Undo, progress preserved on deferral, and checks reset for new recurring occurrences;
 - calm carry-over labels plus the optional quiet daily status: chosen time, silent delivery, count updates/removal, tap-to-Today, permission denial, and default-off behavior;
 - Delete all local data, including cancellation of scheduled reminders.

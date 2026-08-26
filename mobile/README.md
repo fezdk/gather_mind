@@ -4,12 +4,15 @@ This is the native Android/iOS version of Gather Mind. It encrypts its local SQL
 
 New installations start empty. Existing beta data is copied into the encrypted database and verified before the old plaintext value is scrubbed. The gear button opens appearance and reminder settings, an optional biometric **Lock Gather Mind** control, the in-app privacy summary and support guidance, and a confirmed full-data deletion control. Full deletion cancels reminders as well as erasing all app content.
 
+Bottom navigation remains available on ordinary app pages, including appointment details. The active destination uses the same icon highlight across Today, Appointments, Thoughts, and optional Health; modal create/edit sheets remain focused overlays.
+
 The Today screen also includes a daily goal list:
 
 - Swipe right or tap the main completion control to complete a goal. Goals with steps use an overall `x/y` progress badge instead of another step-like checkbox. Completed goals remain visible for the day.
 - Swipe left to open a confirmation before moving an eligible goal to tomorrow. TalkBack exposes the same move as an action on the goal title without adding a visible deferral button.
+- Hold the dedicated reorder handle and drag to arrange Today. A recurring goal is one persistent record rather than a new daily copy, so morning/evening routine positions carry across occurrences. TalkBack offers Move earlier and Move later actions on the same handle.
 - Use the temporary **Undo** action after completing, reopening, postponing, or restoring a goal.
-- Use **Make this smaller** while creating or editing a goal to add one level of optional steps. Today shows compact progress and the next unfinished step, which can expand for direct check-off.
+- Use **Split into smaller steps** while creating or editing a goal to add one level of optional steps. Today shows compact progress and the next unfinished step, which can expand for direct check-off.
 - Existing goals save an edited step as soon as its field loses focus; unfinished changes to the parent title, recurrence, or date still wait for **Save changes**.
 - Checking the final step completes the parent goal with Undo. Completing the parent directly does not mark unfinished steps as done.
 - Repeated deferrals use a yellow-to-rust color ramp and show an explicit `Moved ×` count.
