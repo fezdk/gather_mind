@@ -4,6 +4,9 @@ const THEME_MODE_SETTING = 'gather-mind-theme-mode-v1';
 const DAILY_STATUS_ENABLED_SETTING = 'gather-mind-daily-status-enabled-v1';
 const DAILY_STATUS_MINUTES_SETTING = 'gather-mind-daily-status-minutes-v1';
 const WIDGET_DETAILS_SETTING = 'gather-mind-widget-details-enabled-v1';
+const AUTOMATIC_UPDATE_CHECKS_ENABLED_SETTING = 'gather-mind-automatic-update-checks-enabled-v1';
+const UPDATE_CHECK_LAST_ATTEMPT_SETTING = 'gather-mind-update-check-last-attempt-v1';
+const UPDATE_CHECK_LAST_NOTIFIED_VERSION_SETTING = 'gather-mind-update-check-last-notified-version-v1';
 const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
@@ -54,4 +57,39 @@ export async function loadWidgetDetailsEnabled(): Promise<boolean> {
 
 export async function saveWidgetDetailsEnabled(enabled: boolean): Promise<void> {
   await SecureStore.setItemAsync(WIDGET_DETAILS_SETTING, String(enabled), SECURE_STORE_OPTIONS);
+}
+
+export type UpdateCheckPreference = {
+  enabled: boolean;
+  lastAttemptAt: number | null;
+  lastNotifiedVersion: string | null;
+};
+
+export async function loadUpdateCheckPreference(): Promise<UpdateCheckPreference> {
+  const [storedEnabled, storedLastAttempt, storedLastNotifiedVersion] = await Promise.all([
+    SecureStore.getItemAsync(AUTOMATIC_UPDATE_CHECKS_ENABLED_SETTING, SECURE_STORE_OPTIONS),
+    SecureStore.getItemAsync(UPDATE_CHECK_LAST_ATTEMPT_SETTING, SECURE_STORE_OPTIONS),
+    SecureStore.getItemAsync(UPDATE_CHECK_LAST_NOTIFIED_VERSION_SETTING, SECURE_STORE_OPTIONS),
+  ]);
+  const parsedLastAttempt = storedLastAttempt === null ? NaN : Number(storedLastAttempt);
+  return {
+    enabled: storedEnabled === 'true',
+    lastAttemptAt: Number.isFinite(parsedLastAttempt) && parsedLastAttempt > 0 ? parsedLastAttempt : null,
+    lastNotifiedVersion: storedLastNotifiedVersion?.trim() || null,
+  };
+}
+
+export async function saveAutomaticUpdateChecksEnabled(enabled: boolean): Promise<void> {
+  await SecureStore.setItemAsync(AUTOMATIC_UPDATE_CHECKS_ENABLED_SETTING, String(enabled), SECURE_STORE_OPTIONS);
+}
+
+export async function saveUpdateCheckLastAttemptAt(timestamp: number): Promise<void> {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Unsupported update-check timestamp.');
+  await SecureStore.setItemAsync(UPDATE_CHECK_LAST_ATTEMPT_SETTING, String(timestamp), SECURE_STORE_OPTIONS);
+}
+
+export async function saveUpdateCheckLastNotifiedVersion(version: string): Promise<void> {
+  const normalized = version.trim();
+  if (!normalized) throw new Error('Unsupported update version.');
+  await SecureStore.setItemAsync(UPDATE_CHECK_LAST_NOTIFIED_VERSION_SETTING, normalized, SECURE_STORE_OPTIONS);
 }

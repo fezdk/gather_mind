@@ -17,6 +17,7 @@ const {
   createGoalFromThought,
   createTask,
   dateKeyAfter,
+  groupPastAppointments,
   groupUpcomingAppointments,
   localDateKey,
   nextTaskOccurrence,
@@ -605,15 +606,18 @@ test('loose thoughts exclude appointment links and return when unlinked', () => 
 });
 
 
-test('appointments are sorted and grouped into a calendar-like daily agenda', () => {
+test('upcoming and past appointments are sorted into calendar-like daily agendas', () => {
   const now = new Date(2026, 7, 18, 9, 0);
   const appointment = (id, date) => ({ id, startsAt: date.toISOString() });
-  const groups = groupUpcomingAppointments([
+  const appointments = [
     appointment('later', new Date(2026, 7, 20, 15, 0)),
     appointment('past', new Date(2026, 7, 17, 15, 0)),
+    appointment('past-later-that-day', new Date(2026, 7, 17, 18, 0)),
+    appointment('oldest', new Date(2026, 6, 30, 10, 0)),
     appointment('first', new Date(2026, 7, 19, 9, 0)),
     appointment('same-day', new Date(2026, 7, 19, 14, 0)),
-  ], now);
+  ];
+  const groups = groupUpcomingAppointments(appointments, now);
 
   assert.deepEqual(groups.map((group) => ({
     dateKey: group.dateKey,
@@ -621,5 +625,12 @@ test('appointments are sorted and grouped into a calendar-like daily agenda', ()
   })), [
     { dateKey: '2026-08-19', ids: ['first', 'same-day'] },
     { dateKey: '2026-08-20', ids: ['later'] },
+  ]);
+  assert.deepEqual(groupPastAppointments(appointments, now).map((group) => ({
+    dateKey: group.dateKey,
+    ids: group.appointments.map((item) => item.id),
+  })), [
+    { dateKey: '2026-08-17', ids: ['past-later-that-day', 'past'] },
+    { dateKey: '2026-07-30', ids: ['oldest'] },
   ]);
 });

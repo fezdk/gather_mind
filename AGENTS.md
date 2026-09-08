@@ -12,7 +12,7 @@ After reading this file, read `AGENTS.local.md` completely if it exists in the r
 - SQLCipher is enabled through the `expo-sqlite` config plugin and is not supported in Expo Go. Use a native development, preview, or release build for runtime testing.
 - Existing `expo-sqlite/kv-store` content is migrated copy-first. Preserve the migration and never remove or overwrite the legacy value until the encrypted write has been read back successfully.
 - The optional app lock uses local device authentication and is deliberately separate from the database key, so biometric enrollment changes do not destroy the only key copy.
-- Keep Android Internet access blocked unless the user explicitly changes the privacy model. `mobile/app.json` also disables Android cloud backup.
+- Android Internet access exists only for the explicitly enabled GitHub release check. Keep automatic checks off by default, contact no host except `api.github.com`, send no app content or usage data, and preserve the browser-only manual option. Any other network use requires an explicit privacy-model decision. `mobile/app.json` also disables Android cloud backup.
 - Appointment reminders are local OS notifications. Test real scheduled appointment reminders on a physical Android device.
 - The permanent Android package and future iOS bundle identifier are both `dk.fez.gathermind`.
 - Android phone/portrait is the current target. Tablet support is deliberately off; iOS is prepared but not currently shipped.
@@ -48,6 +48,8 @@ Physical-device release checks should cover:
 - empty first run and restart persistence;
 - keyboard avoidance plus Android status/navigation safe areas;
 - create/edit/delete for goals, thoughts, appointments, and appointment-plan items;
+- appointment Upcoming/Past calendar switching, reverse-chronological history, return from a historical detail, and editing a past appointment without recreating a reminder;
+- update checks default-off; explanatory copy; manual browser route without opting in; at-most-daily automatic foreground checks; current/newer/malformed/offline results; one notice per release version; and no request containing app content;
 - theme autocomplete and thought search filtering;
 - notification denial/approval and a real reminder delivered while the app is closed;
 - daily rollover, future-dated one-offs without false move history, daily non-deferrable goals, move-to-tomorrow confirmation, and distress colors;

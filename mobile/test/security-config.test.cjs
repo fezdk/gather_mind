@@ -33,12 +33,15 @@ test('native configuration requires SQLCipher and local secure authentication', 
   assert.ok(app.plugins.includes('expo-secure-store'));
 });
 
-test('local-only Android privacy constraints remain enabled', () => {
+test('local-first Android configuration permits only the optional release check', () => {
   assert.equal(app.android.package, 'dk.fez.gathermind');
   assert.equal(app.android.allowBackup, false);
   assert.equal(app.android.softwareKeyboardLayoutMode, 'resize');
   assert.equal(app.userInterfaceStyle, 'automatic');
-  assert.ok(app.android.blockedPermissions.includes('android.permission.INTERNET'));
+  assert.ok(app.android.permissions.includes('android.permission.INTERNET'));
+  assert.ok(!app.android.blockedPermissions.includes('android.permission.INTERNET'));
+  assert.ok(app.android.blockedPermissions.includes('android.permission.READ_EXTERNAL_STORAGE'));
+  assert.ok(app.android.blockedPermissions.includes('android.permission.WRITE_EXTERNAL_STORAGE'));
 });
 
 test('public support routes through GitHub without a personal mail address', () => {

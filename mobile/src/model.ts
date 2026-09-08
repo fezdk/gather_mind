@@ -319,13 +319,25 @@ export function upcomingAppointments(appointments: Appointment[], now = new Date
   return appointments.filter((appointment) => Date.parse(appointment.startsAt) >= now.getTime()).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
 
+export function pastAppointments(appointments: Appointment[], now = new Date()) {
+  return appointments.filter((appointment) => Date.parse(appointment.startsAt) < now.getTime()).sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
+}
+
 export type AppointmentGroup = {
   dateKey: string;
   appointments: Appointment[];
 };
 
 export function groupUpcomingAppointments(appointments: Appointment[], now = new Date()): AppointmentGroup[] {
-  return upcomingAppointments(appointments, now).reduce<AppointmentGroup[]>((groups, appointment) => {
+  return groupAppointmentsByDay(upcomingAppointments(appointments, now));
+}
+
+export function groupPastAppointments(appointments: Appointment[], now = new Date()): AppointmentGroup[] {
+  return groupAppointmentsByDay(pastAppointments(appointments, now));
+}
+
+function groupAppointmentsByDay(appointments: Appointment[]): AppointmentGroup[] {
+  return appointments.reduce<AppointmentGroup[]>((groups, appointment) => {
     const dateKey = localDateKey(new Date(appointment.startsAt));
     const current = groups[groups.length - 1];
     if (current?.dateKey === dateKey) current.appointments.push(appointment);

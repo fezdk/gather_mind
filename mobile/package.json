@@ -1,6 +1,6 @@
 {
   "name": "gather-mind-mobile",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "main": "index.ts",
   "license": "Apache-2.0",
   "engines": {
@@ -9,6 +9,7 @@
   "dependencies": {
     "@react-native-community/datetimepicker": "8.4.4",
     "expo": "54.0.37",
+    "expo-application": "~7.0.8",
     "expo-crypto": "~15.0.9",
     "expo-local-authentication": "~17.0.9",
     "expo-modules-core": "3.0.30",

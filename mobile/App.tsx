@@ -1,5 +1,6 @@
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Application from 'expo-application';
 import * as Notifications from 'expo-notifications';
 import * as SystemUI from 'expo-system-ui';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -11,7 +12,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AgendaItem, Appointment, AppState, DailyTask, EditorDraft, REMINDER_OPTIONS, Thought, dateKeyAfter,
-  canPostponeTask, createEmptyState, createGoalFromThought, createTask, createTaskStep, describeCountdown, groupUpcomingAppointments, localDateFromKey, localDateKey, makeId, relatedThoughts, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts, suggestedAppointments, suggestedTags, thoughtsWithTag,
+  canPostponeTask, createEmptyState, createGoalFromThought, createTask, createTaskStep, describeCountdown, groupPastAppointments, groupUpcomingAppointments, localDateFromKey, localDateKey, makeId, relatedThoughts, reminderLabel, reminderTime, removeLegacySeedData, searchThoughts, suggestedAppointments, suggestedTags, thoughtsWithTag,
   nextTaskSortOrder, reorderTasks, taskCarryOverLabel, taskPostponeLimit, taskStepSummary, tasksForToday, tasksForTomorrow, tasksScheduledAhead, toggleTaskCompletion, toggleTaskStep, upcomingAppointments, updateTaskSchedule, updateTaskSteps,
   type AppointmentSuggestion, type HealthRating, type HealthState, type TaskRecurrence, type TaskStep, type ThoughtRelation,
 } from './src/model';
@@ -35,17 +36,22 @@ import {
 } from './src/privacy-operations';
 import { scrollOffsetForVisibleInput, visibleViewportBottom } from './src/keyboard-layout';
 import {
-  loadDailyStatusPreference, loadThemeMode, loadWidgetDetailsEnabled, saveDailyStatusEnabled, saveDailyStatusMinutes,
-  saveThemeMode, saveWidgetDetailsEnabled, type ThemeMode,
+  loadDailyStatusPreference, loadThemeMode, loadUpdateCheckPreference, loadWidgetDetailsEnabled,
+  saveAutomaticUpdateChecksEnabled, saveDailyStatusEnabled, saveDailyStatusMinutes, saveThemeMode,
+  saveUpdateCheckLastAttemptAt, saveUpdateCheckLastNotifiedVersion, saveWidgetDetailsEnabled, type ThemeMode,
 } from './src/preferences';
 import { DEFAULT_DAILY_STATUS_MINUTES, dateAtLocalMinutes } from './src/daily-status';
 import { editorDraftHasChanges } from './src/editor-changes';
 import { DARK_COLORS, LIGHT_COLORS, type ThemeColors } from './src/theme';
 import { clearWidgetSnapshot, updateWidgetSnapshot } from './src/widget';
 import { parseWidgetRoute, type WidgetRoute } from './src/widget-model';
+import {
+  RELEASES_PAGE_URL, automaticUpdateCheckIsDue, fetchLatestRelease, isReleaseNewer, shouldNotifyAboutRelease, type LatestRelease,
+} from './src/updates';
 
 type Tab = 'today' | 'thoughts' | 'appointments' | 'health';
 type PickerMode = 'date' | 'time' | null;
+type AppointmentListMode = 'upcoming' | 'past';
 type Notice = { text: string; actionLabel?: string; onAction?: () => void };
 type LockStatus = 'checking' | 'locked' | 'unlocking' | 'unlocked';
 
@@ -68,6 +74,8 @@ const shortDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'num
 const taskDate = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 const fullDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const shortTime = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+const updateCheckTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const APP_VERSION = Application.nativeApplicationVersion ?? '0.6.2';
 function formatDailyStatusTime(minutes: number) {
   return shortTime.format(dateAtLocalMinutes(localDateKey(), minutes));
 }
@@ -149,6 +157,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const stateRef = useRef<AppState | null>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [appointmentListMode, setAppointmentListMode] = useState<AppointmentListMode>('upcoming');
   const [thoughtModal, setThoughtModal] = useState(false);
   const [editingThoughtId, setEditingThoughtId] = useState<string | null>(null);
   const [taskModal, setTaskModal] = useState(false);
@@ -157,6 +166,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const [appointmentModal, setAppointmentModal] = useState(false);
   const [reminderModal, setReminderModal] = useState(false);
   const [privacyModal, setPrivacyModal] = useState(false);
+  const [updateModal, setUpdateModal] = useState(false);
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [dailyStatusEnabled, setDailyStatusEnabledState] = useState(false);
   const dailyStatusEnabledRef = useRef(false);
@@ -168,6 +178,15 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const widgetDetailsEnabledRef = useRef(false);
   const [widgetSettingBusy, setWidgetSettingBusy] = useState(false);
   const pendingWidgetRouteRef = useRef<WidgetRoute | null>(null);
+  const [automaticUpdateChecksEnabled, setAutomaticUpdateChecksEnabledState] = useState(false);
+  const automaticUpdateChecksEnabledRef = useRef(false);
+  const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
+  const updateCheckBusyRef = useRef(false);
+  const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(null);
+  const lastUpdateCheckAtRef = useRef<number | null>(null);
+  const [latestRelease, setLatestRelease] = useState<LatestRelease | null>(null);
+  const [updateCheckError, setUpdateCheckError] = useState<string | null>(null);
+  const lastNotifiedVersionRef = useRef<string | null>(null);
   const [appLockEnabled, setAppLockEnabledState] = useState(false);
   const appLockEnabledRef = useRef(false);
   const [appLockDelayMs, setAppLockDelayMsState] = useState<AppLockDelayMs>(0);
@@ -201,6 +220,76 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   function updateLockStatus(status: LockStatus) {
     lockStatusRef.current = status;
     setLockStatus(status);
+  }
+
+  async function openReleasePage(url = RELEASES_PAGE_URL): Promise<void> {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn('Could not open GitHub releases', error);
+      Alert.alert('Could not open the browser', 'Open github.com/fezdk/gather_mind/releases to check for a new version.');
+    }
+  }
+
+  async function runAutomaticUpdateCheck(force = false): Promise<LatestRelease | null> {
+    if (!automaticUpdateChecksEnabledRef.current || updateCheckBusyRef.current) return null;
+    if (!force && !automaticUpdateCheckIsDue(true, lastUpdateCheckAtRef.current)) return null;
+
+    const attemptedAt = Date.now();
+    updateCheckBusyRef.current = true;
+    setUpdateCheckBusy(true);
+    lastUpdateCheckAtRef.current = attemptedAt;
+    setLastUpdateCheckAt(attemptedAt);
+    setUpdateCheckError(null);
+    void saveUpdateCheckLastAttemptAt(attemptedAt)
+      .catch((error) => console.warn('Could not save update-check time', error));
+
+    try {
+      const release = await fetchLatestRelease();
+      if (!mountedRef.current) return release;
+      setLatestRelease(release);
+      if (shouldNotifyAboutRelease(release.version, APP_VERSION, lastNotifiedVersionRef.current)) {
+        lastNotifiedVersionRef.current = release.version;
+        void saveUpdateCheckLastNotifiedVersion(release.version)
+          .catch((error) => console.warn('Could not save notified update version', error));
+        Alert.alert(
+          `Gather Mind ${release.version} is available`,
+          `This phone has version ${APP_VERSION}. You can download the update from the public GitHub release.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'View release', onPress: () => void openReleasePage(release.url) },
+          ],
+        );
+      }
+      return release;
+    } catch (error) {
+      console.warn('Could not check GitHub for a Gather Mind update', error);
+      if (mountedRef.current) setUpdateCheckError('Could not reach GitHub. You can still check manually in your browser.');
+      return null;
+    } finally {
+      updateCheckBusyRef.current = false;
+      if (mountedRef.current) setUpdateCheckBusy(false);
+    }
+  }
+
+  async function changeAutomaticUpdateChecks(enabled: boolean): Promise<void> {
+    if (updateCheckBusyRef.current || enabled === automaticUpdateChecksEnabledRef.current) return;
+    updateCheckBusyRef.current = true;
+    setUpdateCheckBusy(true);
+    try {
+      await saveAutomaticUpdateChecksEnabled(enabled);
+      automaticUpdateChecksEnabledRef.current = enabled;
+      setAutomaticUpdateChecksEnabledState(enabled);
+      if (!enabled) setUpdateCheckError(null);
+    } catch (error) {
+      console.warn('Could not save automatic update preference', error);
+      Alert.alert('Update setting was not saved', 'Gather Mind could not save this setting on the phone.');
+      return;
+    } finally {
+      updateCheckBusyRef.current = false;
+      if (mountedRef.current) setUpdateCheckBusy(false);
+    }
+    if (enabled) void runAutomaticUpdateCheck(true);
   }
 
   function beginContentMutation(): (() => void) | null {
@@ -336,6 +425,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         setTab('today');
         await Notifications.clearLastNotificationResponse();
       }
+      void runAutomaticUpdateCheck();
     })();
     hydrationPromiseRef.current = hydration;
     try {
@@ -407,6 +497,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     setAppointmentModal(false);
     setReminderModal(false);
     setPrivacyModal(false);
+    setUpdateModal(false);
     setNotice(null);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = null;
@@ -491,11 +582,12 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
 
   async function initialiseApp(): Promise<void> {
     // Read the persisted lock before any fallible startup work so retry can never fail open.
-    const [enabled, delayMs, dailyStatus, widgetDetails, initialUrl] = await Promise.all([
+    const [enabled, delayMs, dailyStatus, widgetDetails, updateChecks, initialUrl] = await Promise.all([
       loadAppLockEnabled(),
       loadAppLockDelayMs(),
       loadDailyStatusPreference(DEFAULT_DAILY_STATUS_MINUTES),
       loadWidgetDetailsEnabled(),
+      loadUpdateCheckPreference(),
       Linking.getInitialURL(),
     ]);
     if (!mountedRef.current) return;
@@ -509,6 +601,18 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     setDailyStatusMinutesState(dailyStatus.minutes);
     widgetDetailsEnabledRef.current = widgetDetails;
     setWidgetDetailsEnabledState(widgetDetails);
+    automaticUpdateChecksEnabledRef.current = updateChecks.enabled;
+    setAutomaticUpdateChecksEnabledState(updateChecks.enabled);
+    lastUpdateCheckAtRef.current = updateChecks.lastAttemptAt;
+    setLastUpdateCheckAt(updateChecks.lastAttemptAt);
+    lastNotifiedVersionRef.current = updateChecks.lastNotifiedVersion;
+    if (updateChecks.lastNotifiedVersion && isReleaseNewer(updateChecks.lastNotifiedVersion, APP_VERSION)) {
+      setLatestRelease({
+        version: updateChecks.lastNotifiedVersion,
+        tagName: `v${updateChecks.lastNotifiedVersion}`,
+        url: `${RELEASES_PAGE_URL}/tag/v${encodeURIComponent(updateChecks.lastNotifiedVersion)}`,
+      });
+    }
     if (initialUrl) pendingWidgetRouteRef.current = parseWidgetRoute(initialUrl);
     await configureNotifications();
     if (!mountedRef.current) return;
@@ -581,6 +685,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
           setAwayCover(false);
         }
         requestAutomaticUnlock();
+        if (lockStatusRef.current === 'unlocked') void runAutomaticUpdateCheck();
         return;
       }
       // Cover the app before iOS captures its task-switcher snapshot. A
@@ -608,6 +713,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (updateModal) { setUpdateModal(false); return true; }
       if (privacyModal) { setPrivacyModal(false); return true; }
       if (reminderModal) { setReminderModal(false); return true; }
       if (appointmentModal) { closeAppointmentEditor(); return true; }
@@ -619,7 +725,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       return false;
     });
     return () => subscription.remove();
-  }, [appointmentModal, pendingPostponeId, privacyModal, reminderModal, selectedId, tab, taskModal, thoughtModal]);
+  }, [appointmentModal, pendingPostponeId, privacyModal, reminderModal, selectedId, tab, taskModal, thoughtModal, updateModal]);
 
   function commit(next: AppState): boolean {
     if (deletingAllRef.current) return false;
@@ -657,6 +763,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     setPendingPostponeId(null);
     setReminderModal(false);
     setPrivacyModal(false);
+    setUpdateModal(false);
     if (route.kind === 'appointment') {
       const appointment = current.appointments.find((item) => item.id === route.id);
       if (appointment) {
@@ -926,11 +1033,12 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
 
   async function upsertAppointment(input: Omit<Appointment, 'notificationId' | 'createdAt' | 'agenda'> & { existing?: Appointment }) {
     if (!state) return;
-    if (Date.parse(input.startsAt) <= Date.now()) {
+    const appointmentIsPast = Date.parse(input.startsAt) <= Date.now();
+    if (!input.existing && appointmentIsPast) {
       Alert.alert('Choose a future time', 'The appointment time has already passed.');
       return;
     }
-    if (input.reminderMinutes && reminderTime(input.startsAt, input.reminderMinutes).getTime() <= Date.now()) {
+    if (!appointmentIsPast && input.reminderMinutes && reminderTime(input.startsAt, input.reminderMinutes).getTime() <= Date.now()) {
       Alert.alert('That reminder time has passed', 'Choose a shorter reminder interval for this appointment.');
       return;
     }
@@ -941,7 +1049,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       const existing = input.existing;
       let appointment: Appointment = {
         id: input.id, title: input.title, startsAt: input.startsAt, location: input.location,
-        reminderMinutes: input.reminderMinutes, notificationId: existing?.notificationId ?? null,
+        reminderMinutes: appointmentIsPast ? 0 : input.reminderMinutes, notificationId: existing?.notificationId ?? null,
         createdAt: existing?.createdAt ?? new Date().toISOString(), agenda: existing?.agenda ?? [],
       };
       if (appointment.reminderMinutes > 0) {
@@ -967,7 +1075,8 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       setAppointmentModal(false);
       setSelectedId(appointment.id);
       setTab('appointments');
-      flash(existing ? 'Appointment and reminder updated' : 'Appointment and reminder saved');
+      if (appointmentIsPast) setAppointmentListMode('past');
+      flash(appointmentIsPast ? 'Past appointment updated' : existing ? 'Appointment and reminder updated' : 'Appointment and reminder saved');
     } catch (error) {
       Alert.alert('Could not save appointment', String(error));
     } finally {
@@ -1350,6 +1459,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       setAppointmentModal(false);
       setReminderModal(false);
       setPrivacyModal(false);
+      setUpdateModal(false);
       if (reminderCleanupFailed || widgetCleanupFailed) {
         const reminderWarning = reminderCleanupFailed ? ' Android may still hold a scheduled or delivered reminder; clear any visible Gather Mind notification or alarm.' : '';
         const widgetWarning = widgetCleanupFailed ? ' The home-screen widget may still show its previous encrypted summary; remove the widget or clear Gather Mind’s app storage.' : '';
@@ -1439,7 +1549,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     /> : <>
       {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onReorderTasks={reorderTodayTasks} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />}
       {tab === 'thoughts' && <ThoughtsView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
-      {tab === 'appointments' && <AppointmentsView appointments={state.appointments} onAdd={openAppointmentEditor} onOpen={setSelectedId} />}
+      {tab === 'appointments' && <AppointmentsView appointments={state.appointments} thoughts={state.thoughts} mode={appointmentListMode} onModeChange={setAppointmentListMode} onAdd={openAppointmentEditor} onOpen={setSelectedId} />}
       {tab === 'health' && state.health.enabled && <HealthView health={state.health} onRate={changeHealthRating} onLogCycleStart={logCycleStart} onSetPeriodEnd={savePeriodEnd} onRemovePeriod={confirmRemovePeriod} onClearHistory={confirmClearHealthHistory} />}
     </>}
     <View style={[s.nav, { height: 78 + insets.bottom, paddingBottom: Math.max(4, insets.bottom) }]}>
@@ -1452,7 +1562,8 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     <ThoughtModal visible={thoughtModal} thought={editingThought} thoughts={state.thoughts} appointments={state.appointments} hasGoal={editingThoughtHasGoal} draft={editorDraft?.kind === 'thought' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeThoughtEditor} onSave={saveThought} onTurnIntoGoal={turnThoughtIntoGoal} onDelete={deleteThought} preselectedId={selectedId ?? ''} />
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
-    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
+    <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} updateAvailable={!!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION)} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onUpdates={() => { setReminderModal(false); setUpdateModal(true); }} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
+    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckNow={() => void runAutomaticUpdateCheck(true)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -2169,15 +2280,28 @@ function appointmentSuggestionReason(suggestion: AppointmentSuggestion) {
   return describeCountdown(suggestion.appointment.startsAt);
 }
 
-function AppointmentsView({ appointments, onAdd, onOpen }: { appointments: Appointment[]; onAdd: () => void; onOpen: (id: string) => void }) {
+function AppointmentsView({ appointments, thoughts, mode, onModeChange, onAdd, onOpen }: { appointments: Appointment[]; thoughts: Thought[]; mode: AppointmentListMode; onModeChange: (mode: AppointmentListMode) => void; onAdd: () => void; onOpen: (id: string) => void }) {
   const { s } = useAppTheme();
   const { bottom } = useSafeAreaInsets();
-  const groups = groupUpcomingAppointments(appointments);
+  const upcomingGroups = groupUpcomingAppointments(appointments);
+  const pastGroups = groupPastAppointments(appointments);
+  const groups = mode === 'upcoming' ? upcomingGroups : pastGroups;
+  const upcomingCount = upcomingGroups.reduce((count, group) => count + group.appointments.length, 0);
+  const pastCount = pastGroups.reduce((count, group) => count + group.appointments.length, 0);
+  const linkedCounts = thoughts.reduce((counts, thought) => {
+    if (thought.appointmentId) counts.set(thought.appointmentId, (counts.get(thought.appointmentId) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
   return <ScrollView style={s.content} contentContainerStyle={[s.body, { paddingBottom: 112 + bottom }]}>
     <Text style={s.eyebrow}>Be ready</Text><Text style={s.title} accessibilityRole="header">Appointments</Text>
     <Text style={s.subtitle}>A dated agenda for the time, place, questions, documents, decisions, and follow-ups you want together.</Text>
     <Pressable style={s.scheduleAction} onPress={onAdd} accessibilityRole="button" accessibilityLabel="Schedule a new appointment"><Text style={s.scheduleActionText}>+ Schedule an appointment</Text></Pressable>
-    <View style={s.calendarList}>{groups.length ? groups.map((group) => <View key={group.dateKey} style={s.calendarDay}><View style={s.calendarDayHeader}><View style={s.calendarDayDot} importantForAccessibility="no" /><Text style={s.calendarDayLabel} accessibilityRole="header">{calendarDayLabel(group.appointments[0].startsAt)}</Text></View><View style={s.calendarDayCards}>{group.appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} linkedCount={0} onPress={() => onOpen(appointment.id)} />)}</View></View>) : <Empty title="Nothing scheduled" body="Use “Schedule an appointment” to choose a date, time, place, and reminder." />}</View>
+    <View style={s.appointmentListChoices} accessibilityLabel="Choose appointment calendar">
+      <Pressable style={[s.appointmentListChoice, mode === 'upcoming' && s.appointmentListChoiceSelected]} onPress={() => onModeChange('upcoming')} accessibilityRole="tab" accessibilityState={{ selected: mode === 'upcoming' }} accessibilityLabel={`Upcoming appointments, ${upcomingCount}`}><Text style={[s.appointmentListChoiceText, mode === 'upcoming' && s.appointmentListChoiceTextSelected]}>Upcoming · {upcomingCount}</Text></Pressable>
+      <Pressable style={[s.appointmentListChoice, mode === 'past' && s.appointmentListChoiceSelected]} onPress={() => onModeChange('past')} accessibilityRole="tab" accessibilityState={{ selected: mode === 'past' }} accessibilityLabel={`Past appointments, ${pastCount}`}><Text style={[s.appointmentListChoiceText, mode === 'past' && s.appointmentListChoiceTextSelected]}>Past · {pastCount}</Text></Pressable>
+    </View>
+    {mode === 'past' && <Text style={s.appointmentHistoryHint}>Past appointments stay available to review or edit, including their plans and linked thoughts.</Text>}
+    <View style={s.calendarList}>{groups.length ? groups.map((group) => <View key={group.dateKey} style={s.calendarDay}><View style={s.calendarDayHeader}><View style={[s.calendarDayDot, mode === 'past' && s.calendarDayDotPast]} importantForAccessibility="no" /><Text style={s.calendarDayLabel} accessibilityRole="header">{calendarDayLabel(group.appointments[0].startsAt)}</Text></View><View style={s.calendarDayCards}>{group.appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} linkedCount={linkedCounts.get(appointment.id) ?? 0} onPress={() => onOpen(appointment.id)} />)}</View></View>) : <Empty title={mode === 'past' ? 'No past appointments' : 'Nothing scheduled'} body={mode === 'past' ? 'Appointments will remain here after their scheduled time.' : 'Use “Schedule an appointment” to choose a date, time, place, and reminder.'} />}</View>
   </ScrollView>;
 }
 
@@ -2195,6 +2319,7 @@ function AppointmentDetail({ appointment, thoughts, draft, onDraftChange, onDraf
   const [planModal, setPlanModal] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const editingPlanItem = appointment.agenda.find((item) => item.id === editingPlanId);
+  const appointmentIsPast = Date.parse(appointment.startsAt) < Date.now();
   useEffect(() => {
     if (draft?.appointmentId === appointment.id) {
       setEditingPlanId(draft.itemId);
@@ -2222,7 +2347,7 @@ function AppointmentDetail({ appointment, thoughts, draft, onDraftChange, onDraf
   }
   return <><ScrollView style={s.content} contentContainerStyle={[s.detailBody, { paddingBottom: 112 + bottom }]} keyboardShouldPersistTaps="handled">
     <Pressable style={s.backButton} onPress={onBack} accessibilityRole="button" accessibilityLabel={`Back to ${backLabel}`}><Text style={s.back}>‹ {backLabel}</Text></Pressable>
-    <View style={s.hero}><Text style={s.heroEyebrow}>{describeCountdown(appointment.startsAt)}</Text><Text ref={headingRef} style={s.heroTitle} accessibilityRole="header">{appointment.title}</Text><Text style={s.heroFact}>{fullDate.format(new Date(appointment.startsAt))}</Text>{!!appointment.location && <Text style={s.heroFact} accessibilityLabel={`Place or person: ${appointment.location}`}>⌖  {appointment.location}</Text>}<View style={s.reminderPill}><Text style={s.reminderPillText}>{appointment.notificationId ? `Reminder set · ${reminderLabel(appointment.reminderMinutes)} before` : 'Reminder off'}</Text></View></View>
+    <View style={s.hero}><Text style={s.heroEyebrow}>{describeCountdown(appointment.startsAt)}</Text><Text ref={headingRef} style={s.heroTitle} accessibilityRole="header">{appointment.title}</Text><Text style={s.heroFact}>{fullDate.format(new Date(appointment.startsAt))}</Text>{!!appointment.location && <Text style={s.heroFact} accessibilityLabel={`Place or person: ${appointment.location}`}>⌖  {appointment.location}</Text>}<View style={s.reminderPill}><Text style={s.reminderPillText}>{appointmentIsPast ? 'Past appointment' : appointment.notificationId ? `Reminder set · ${reminderLabel(appointment.reminderMinutes)} before` : 'Reminder off'}</Text></View></View>
     <Section eyebrow="Prepare your way" title="Appointment plan" />
     <Text style={s.planIntro}>Questions, decisions, documents, things to bring, errands, or follow-ups—keep whatever helps you feel prepared.</Text>
     {appointment.agenda.length ? appointment.agenda.map((item) => <View key={item.id} style={s.agenda}><Pressable style={s.checkboxTarget} onPress={() => onChange({ ...appointment, agenda: appointment.agenda.map((other) => other.id === item.id ? { ...other, done: !other.done } : other) })} accessibilityRole="checkbox" accessibilityState={{ checked: item.done }} accessibilityLabel={`${item.text}, appointment plan item`}><View style={[s.checkbox, item.done && s.checkboxDone]} importantForAccessibility="no-hide-descendants">{item.done && <Text style={s.check} allowFontScaling={false}>✓</Text>}</View></Pressable><Pressable style={s.agendaContent} onPress={() => openPlanItem(item)} accessibilityRole="button" accessibilityLabel={`Edit appointment plan item: ${item.text}`}><Text style={[s.agendaText, item.done && s.done]}>{item.text}</Text><Text style={s.editHint}>Tap to edit</Text></Pressable></View>) : <Empty title="Your plan is open" body="Add anything you want to remember before, during, or after this appointment." />}
@@ -2454,6 +2579,7 @@ function AppointmentModal({ visible, appointment, baseline, draft, onDraftChange
   const locationLabelId = useId();
   const defaultDate = useMemo(defaultAppointmentStart, []);
   const [title, setTitle] = useState(''); const [location, setLocation] = useState(''); const [date, setDate] = useState(defaultDate); const [minutes, setMinutes] = useState(120); const [picker, setPicker] = useState<PickerMode>(null);
+  const historicalDate = !!appointment && date.getTime() <= Date.now();
   const itemId = appointment?.id ?? draft?.itemId ?? null;
   useEffect(() => { if (visible) { setTitle(draft?.title ?? baseline?.title ?? appointment?.title ?? ''); setLocation(draft?.location ?? baseline?.location ?? appointment?.location ?? ''); setDate(new Date(draft?.startsAt ?? baseline?.startsAt ?? appointment?.startsAt ?? defaultDate)); setMinutes(draft?.reminderMinutes ?? baseline?.reminderMinutes ?? appointment?.reminderMinutes ?? 120); setPicker(null); } }, [visible, appointment, baseline, defaultDate, draft]);
   function publishDraft(next: Partial<Pick<Extract<EditorDraft, { kind: 'appointment' }>, 'title' | 'startsAt' | 'location' | 'reminderMinutes'>>) {
@@ -2468,14 +2594,44 @@ function AppointmentModal({ visible, appointment, baseline, draft, onDraftChange
   return <Sheet visible={visible} onClose={onClose} eyebrow={appointment ? 'Edit appointment' : 'New appointment'} title="When do you need to be there?" expanded>
     <Field nativeID={appointmentNameLabelId}>Appointment name</Field><SheetTextInput style={s.input} value={title} onChangeText={changeTitle} placeholder="Doctor, teacher, contractor, meeting…" placeholderTextColor={C.muted} accessibilityLabel="Appointment name" accessibilityLabelledBy={appointmentNameLabelId} autoFocus />
     <Field>Date and time</Field><View style={s.dateRow}><Pressable style={s.dateButton} onPress={() => openPicker('date')} accessibilityRole="button" accessibilityLabel={`Choose appointment date, currently ${shortDate.format(date)}`}><Text style={s.dateLabel}>DATE</Text><Text style={s.dateValue}>{shortDate.format(date)}</Text></Pressable><Pressable style={s.dateButton} onPress={() => openPicker('time')} accessibilityRole="button" accessibilityLabel={`Choose appointment time, currently ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)}`}><Text style={s.dateLabel}>TIME</Text><Text style={s.dateValue}>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)}</Text></Pressable></View>
-    {!!picker && <View style={s.pickerWrap}><DateTimePicker value={date} mode={picker} display={Platform.OS === 'ios' ? 'spinner' : 'default'} minimumDate={picker === 'date' ? new Date() : undefined} onChange={changeDate} />{Platform.OS === 'ios' && <Pressable style={s.pickerDoneButton} onPress={() => setPicker(null)} accessibilityRole="button"><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
+    {!!picker && <View style={s.pickerWrap}><DateTimePicker value={date} mode={picker} display={Platform.OS === 'ios' ? 'spinner' : 'default'} minimumDate={picker === 'date' && !appointment ? new Date() : undefined} onChange={changeDate} />{Platform.OS === 'ios' && <Pressable style={s.pickerDoneButton} onPress={() => setPicker(null)} accessibilityRole="button"><Text style={s.pickerDone}>Done</Text></Pressable>}</View>}
     <Field nativeID={locationLabelId}>Place or person (optional)</Field><SheetTextInput style={s.input} value={location} onChangeText={changeLocation} placeholder="Office, address, person, or video call" placeholderTextColor={C.muted} accessibilityLabel="Place or person, optional" accessibilityLabelledBy={locationLabelId} />
-    <Field>Remind me</Field><View style={s.reminderChoices}>{REMINDER_OPTIONS.map((option) => <Chip key={option.value} label={option.label} selected={minutes === option.value} selectionMode="radio" accessibilityLabel={`Remind me ${option.label} before`} onPress={() => changeMinutes(option.value)} />)}</View>
+    {historicalDate ? <Text style={s.pastAppointmentNote}>This appointment is in the past. Saving keeps it in your history with reminders off.</Text> : <><Field>Remind me</Field><View style={s.reminderChoices}>{REMINDER_OPTIONS.map((option) => <Chip key={option.value} label={option.label} selected={minutes === option.value} selectionMode="radio" accessibilityLabel={`Remind me ${option.label} before`} onPress={() => changeMinutes(option.value)} />)}</View></>}
     <Primary label={appointment ? 'Save changes' : 'Create appointment'} onPress={submit} disabled={!title.trim()} />
   </Sheet>;
 }
 
-function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTrackingEnabled, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, widgetDetailsEnabled, widgetSettingBusy, appLockEnabled, appLockDelayMs, appLockBusy, onClose, onEnable, onThemeModeChange, onHealthEnabledChange, onCycleTrackingEnabledChange, onDailyStatusChange, onDailyStatusMinutesChange, onWidgetDetailsChange, onAppLockChange, onAppLockDelayChange, onPrivacy, onDeleteAll }: { visible: boolean; enabled: boolean; themeMode: ThemeMode; healthEnabled: boolean; cycleTrackingEnabled: boolean; dailyStatusEnabled: boolean; dailyStatusMinutes: number; dailyStatusBusy: boolean; widgetDetailsEnabled: boolean; widgetSettingBusy: boolean; appLockEnabled: boolean; appLockDelayMs: AppLockDelayMs; appLockBusy: boolean; onClose: () => void; onEnable: () => void; onThemeModeChange: (mode: ThemeMode) => void; onHealthEnabledChange: (enabled: boolean) => void; onCycleTrackingEnabledChange: (enabled: boolean) => void; onDailyStatusChange: (enabled: boolean) => void; onDailyStatusMinutesChange: (minutes: number) => void; onWidgetDetailsChange: (enabled: boolean) => void; onAppLockChange: (enabled: boolean) => void; onAppLockDelayChange: (delayMs: AppLockDelayMs) => void; onPrivacy: () => void; onDeleteAll: () => void }) {
+type SettingsModalProps = {
+  visible: boolean;
+  enabled: boolean;
+  themeMode: ThemeMode;
+  healthEnabled: boolean;
+  cycleTrackingEnabled: boolean;
+  dailyStatusEnabled: boolean;
+  dailyStatusMinutes: number;
+  dailyStatusBusy: boolean;
+  widgetDetailsEnabled: boolean;
+  widgetSettingBusy: boolean;
+  appLockEnabled: boolean;
+  appLockDelayMs: AppLockDelayMs;
+  appLockBusy: boolean;
+  updateAvailable: boolean;
+  onClose: () => void;
+  onEnable: () => void;
+  onThemeModeChange: (mode: ThemeMode) => void;
+  onHealthEnabledChange: (enabled: boolean) => void;
+  onCycleTrackingEnabledChange: (enabled: boolean) => void;
+  onDailyStatusChange: (enabled: boolean) => void;
+  onDailyStatusMinutesChange: (minutes: number) => void;
+  onWidgetDetailsChange: (enabled: boolean) => void;
+  onAppLockChange: (enabled: boolean) => void;
+  onAppLockDelayChange: (delayMs: AppLockDelayMs) => void;
+  onUpdates: () => void;
+  onPrivacy: () => void;
+  onDeleteAll: () => void;
+};
+
+function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTrackingEnabled, dailyStatusEnabled, dailyStatusMinutes, dailyStatusBusy, widgetDetailsEnabled, widgetSettingBusy, appLockEnabled, appLockDelayMs, appLockBusy, updateAvailable, onClose, onEnable, onThemeModeChange, onHealthEnabledChange, onCycleTrackingEnabledChange, onDailyStatusChange, onDailyStatusMinutesChange, onWidgetDetailsChange, onAppLockChange, onAppLockDelayChange, onUpdates, onPrivacy, onDeleteAll }: SettingsModalProps) {
   const { C, s } = useAppTheme();
   const [showDailyStatusTimePicker, setShowDailyStatusTimePicker] = useState(false);
   useEffect(() => { if (!visible || !dailyStatusEnabled) setShowDailyStatusTimePicker(false); }, [visible, dailyStatusEnabled]);
@@ -2484,7 +2640,7 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
     if (event.type === 'dismissed' || !value) return;
     onDailyStatusMinutesChange(value.getHours() * 60 + value.getMinutes());
   }
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.1" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.2" title="Settings & privacy">
     <Field heading>Appearance</Field>
     <View style={s.themeChoices}>{THEME_MODE_OPTIONS.map((option) => <Pressable key={option.value} style={[s.themeChoice, themeMode === option.value && s.themeChoiceSelected]} onPress={() => onThemeModeChange(option.value)} accessibilityRole="radio" accessibilityState={{ checked: themeMode === option.value }} accessibilityLabel={`Appearance: ${option.label}`}><Text style={[s.themeChoiceText, themeMode === option.value && s.themeChoiceTextSelected]}>{option.label}</Text></Pressable>)}</View>
     <Text style={s.privacy}>Follow device changes automatically with your phone’s light or dark appearance.</Text>
@@ -2512,6 +2668,9 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
       <View style={s.lockDelayChoices}>{APP_LOCK_DELAY_OPTIONS.map((option) => <Pressable key={option.value} style={[s.lockDelayChoice, appLockDelayMs === option.value && s.lockDelayChoiceSelected, appLockBusy && s.disabled]} onPress={() => onAppLockDelayChange(option.value)} disabled={appLockBusy} accessibilityRole="radio" accessibilityState={{ checked: appLockDelayMs === option.value }}><Text style={[s.lockDelayChoiceText, appLockDelayMs === option.value && s.lockDelayChoiceTextSelected]}>{option.label}</Text></Pressable>)}</View>
     </View>}
     <Text style={s.privacy}>The encryption key stays in this device’s secure key store and is not tied to your biometric profile. Removing all enrolled biometrics can temporarily block the app until you add one again.</Text>
+    <Field heading>App updates</Field>
+    <View style={s.privacySummary}><Text style={s.cardTitle}>{updateAvailable ? 'A newer version is available' : `Installed version ${APP_VERSION}`}</Text><Text style={s.small}>Automatic checks are optional and off by default. Open the update settings to see exactly when Gather Mind contacts GitHub.</Text></View>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onUpdates} accessibilityRole="button"><Text style={s.secondaryText}>{updateAvailable ? 'View available update' : 'Update check options'}</Text></Pressable>
     <Field heading>Privacy & support</Field>
     <View style={s.privacySummary}><Text style={s.cardTitle}>Private and encrypted by default</Text><Text style={s.small}>Your content stays encrypted on this phone. Gather Mind has no account, ads, analytics, backend, or remote sync.</Text></View>
     <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onPrivacy} accessibilityRole="button"><Text style={s.secondaryText}>Read privacy & support</Text></Pressable>
@@ -2519,14 +2678,56 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
   </Sheet>;
 }
 
+type UpdateSettingsModalProps = {
+  visible: boolean;
+  enabled: boolean;
+  busy: boolean;
+  lastCheckedAt: number | null;
+  latestRelease: LatestRelease | null;
+  error: string | null;
+  onClose: () => void;
+  onEnabledChange: (enabled: boolean) => void;
+  onCheckNow: () => void;
+  onCheckInBrowser: () => void;
+  onOpenRelease: (release: LatestRelease) => void;
+};
+
+function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onCheckNow, onCheckInBrowser, onOpenRelease }: UpdateSettingsModalProps) {
+  const { C, s } = useAppTheme();
+  const updateAvailable = !!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION);
+  const status = error
+    ?? (updateAvailable
+      ? `Version ${latestRelease.version} is available. This phone has ${APP_VERSION}.`
+      : latestRelease
+        ? `Version ${APP_VERSION} is up to date.`
+        : enabled
+          ? 'No automatic check has completed yet.'
+          : 'Automatic checks are off.');
+  return <Sheet visible={visible} onClose={onClose} eyebrow={`Installed version ${APP_VERSION}`} title="App updates">
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your content is never part of an update check</Text><Text style={s.small}>Thoughts, goals, appointments, health entries, identifiers, and usage data stay on this phone.</Text></View>
+    <Field heading>Automatic checks</Field>
+    <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Check GitHub for new releases</Text><Text style={s.small}>When enabled, Gather Mind asks GitHub for the latest public release at most once every 24 hours when you open or return to the app. It does not run a background service.</Text></View><Switch style={s.switchControl} value={enabled} onValueChange={onEnabledChange} disabled={busy} trackColor={{ false: C.line, true: C.sage }} thumbColor={enabled ? C.accentSolid : C.white} accessibilityLabel="Automatically check GitHub for Gather Mind updates" /></View>
+    <Text style={s.policyText}>Android grants apps general Internet access when they are installed; it does not show a runtime permission prompt or provide a per-app permission switch for it. This Gather Mind setting is the control over whether the app itself uses that access for update checks.</Text>
+    <Text style={[s.policyText, s.spacedText]}>An automatic check contacts only <Text style={s.inlineStrong}>api.github.com</Text> over HTTPS and reads the public release version. GitHub receives ordinary connection information such as your IP address and request metadata. Gather Mind’s developer receives no update-check data.</Text>
+    <View style={[s.reminderStatus, s.spacedButton]}><View style={[s.statusDot, updateAvailable && s.statusDotOn]} importantForAccessibility="no" /><View style={s.flex}><Text style={s.cardTitle} accessibilityLiveRegion="polite">{busy ? 'Checking GitHub…' : status}</Text>{lastCheckedAt && <Text style={s.small}>Last attempted {updateCheckTime.format(new Date(lastCheckedAt))}</Text>}</View>{busy && <ActivityIndicator color={C.accentText} />}</View>
+    {enabled && <Primary label={busy ? 'Checking…' : 'Check now'} onPress={onCheckNow} disabled={busy} />}
+    {updateAvailable && latestRelease && <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => onOpenRelease(latestRelease)} accessibilityRole="link"><Text style={s.secondaryText}>Open Gather Mind {latestRelease.version}</Text></Pressable>}
+    <Field heading>Manual check</Field>
+    <Text style={s.policyText}>You can leave automatic checks off and open the public releases page in your browser instead. In that case Gather Mind makes no network request; your browser handles the connection to GitHub.</Text>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onCheckInBrowser} accessibilityRole="link"><Text style={s.secondaryText}>Check manually in browser</Text></Pressable>
+  </Sheet>;
+}
+
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   const { s } = useAppTheme();
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 25 August 2026" title="Privacy, data & support">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind 0.6.1 does not collect, transmit, sell, or share your thoughts, goals, appointments, optional health entries, or usage data.</Text></View>
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 7 September 2026" title="Privacy, data & support">
+    <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind {APP_VERSION} does not collect, transmit, sell, or share your thoughts, goals, appointments, optional health entries, or usage data.</Text></View>
     <Field heading>What the app stores</Field>
     <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. This includes optional mood, sleep-quality, and period start/end entries when their features are enabled. The random database key is kept in the phone’s secure key store. The Android home-screen widget receives a bounded summary encrypted separately with Android Keystore; it never receives health entries. Its default count-and-time mode excludes titles; showing titles requires your explicit choice because home-screen content is visible without Gather Mind’s app lock. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field heading>Permissions</Field>
-    <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. Health tracking requires no Android health permission, sensor permission, or Internet access. You can deny notifications and leave every optional feature off.</Text>
+    <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. Health tracking requires no Android health permission or sensor permission and never uses the network. You can deny notifications and leave every optional feature off.</Text>
+    <Field heading>Optional update checks</Field>
+    <Text style={s.policyText}>The Android app includes general Internet access solely so it can offer the automatic release check in Settings. Android grants this at installation without a runtime prompt. Automatic checks are off by default. If enabled, Gather Mind contacts only GitHub’s public release API over HTTPS, at most once every 24 hours when the app opens or returns to the foreground. It sends no app content, health data, usage history, account identifier, or device identifier. GitHub still receives ordinary connection information such as your IP address and request metadata. Gather Mind’s developer does not receive update-check data. The manual option opens GitHub in your browser instead, without a request from Gather Mind.</Text>
     <Field heading>Retention and deletion</Field>
     <Text style={s.policyText}>Data remains until you delete individual items, clear health history from Health, use the control below, clear the app’s storage, or uninstall the app. Turning Health off hides the tab; turning cycle tracking off hides period history and Today cycle estimates. Neither erases encrypted history. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field heading>Support</Field>
@@ -2644,8 +2845,10 @@ function Sheet({ visible, onClose, eyebrow, title, children, expanded = false }:
 function AppointmentCard({ appointment, linkedCount, onPress }: { appointment: Appointment; linkedCount: number; onPress: () => void }) {
   const { s } = useAppTheme();
   const date = new Date(appointment.startsAt); const total = appointment.agenda.length + linkedCount;
+  const appointmentIsPast = date.getTime() < Date.now();
   const timeLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(date);
-  return <Pressable style={s.appointmentCard} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${appointment.title}, ${fullDate.format(date)}, ${appointment.notificationId ? `reminder ${reminderLabel(appointment.reminderMinutes)} before` : 'reminder off'}, ${total} ${total === 1 ? 'item' : 'items'}`} accessibilityHint="Opens appointment details"><View style={s.dateBlock} importantForAccessibility="no-hide-descendants"><Text style={s.dateMonth} allowFontScaling={false}>{new Intl.DateTimeFormat(undefined, { month: 'short' }).format(date)}</Text><Text style={s.dateDay} allowFontScaling={false}>{date.getDate()}</Text></View><View style={s.flex}><Text style={s.cardTitle}>{appointment.title}</Text><Text style={s.small}>{timeLabel}</Text><Text style={s.reminderLine}>{appointment.notificationId ? '◷ Reminder set' : '◷ Reminder off'} · {total} items</Text></View><Text style={s.chevron} allowFontScaling={false}>›</Text></Pressable>;
+  const reminderStatus = appointmentIsPast ? 'past appointment' : appointment.notificationId ? `reminder ${reminderLabel(appointment.reminderMinutes)} before` : 'reminder off';
+  return <Pressable style={s.appointmentCard} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${appointment.title}, ${fullDate.format(date)}, ${reminderStatus}, ${total} ${total === 1 ? 'item' : 'items'}`} accessibilityHint="Opens appointment details"><View style={s.dateBlock} importantForAccessibility="no-hide-descendants"><Text style={s.dateMonth} allowFontScaling={false}>{new Intl.DateTimeFormat(undefined, { month: 'short' }).format(date)}</Text><Text style={s.dateDay} allowFontScaling={false}>{date.getDate()}</Text></View><View style={s.flex}><Text style={s.cardTitle}>{appointment.title}</Text><Text style={s.small}>{timeLabel}</Text><Text style={[s.reminderLine, appointmentIsPast && s.appointmentPastLine]}>{appointmentIsPast ? 'Past' : appointment.notificationId ? '◷ Reminder set' : '◷ Reminder off'} · {total} {total === 1 ? 'item' : 'items'}</Text></View><Text style={s.chevron} allowFontScaling={false}>›</Text></Pressable>;
 }
 
 function ThoughtRow({ thought, color, onPress, onExplore, detail }: { thought: Thought; color: string; onPress: () => void; onExplore?: () => void; detail?: string }) {
@@ -2717,5 +2920,14 @@ function makeStyles(C: ThemeColors) { return StyleSheet.create({
   chips: { flexDirection: 'row', gap: 8, paddingBottom: 4 }, reminderChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 4 }, suggestionChips: { flexDirection: 'row', gap: 8, paddingTop: 9, paddingBottom: 2 }, showAllLink: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' }, chip: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 24, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, chipSelected: { backgroundColor: C.accentSolid, borderColor: C.accentText }, chipText: { color: C.muted, fontSize: 12, fontWeight: '600' }, chipTextSelected: { color: C.white }, inputHint: { color: C.muted, fontSize: 10, lineHeight: 14, marginTop: 6 }, primary: { minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, marginTop: 22, paddingHorizontal: 14, paddingVertical: 10 }, primaryText: { color: C.white, fontSize: 14, fontWeight: '800', textAlign: 'center' }, disabled: { opacity: .45 }, thoughtToGoal: { flex: 0, marginTop: 10, backgroundColor: C.sagePale }, thoughtToGoalHint: { color: C.muted, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 6, marginBottom: 2 }, sourceThoughtCard: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 10 }, sourceThoughtLabel: { color: C.accentText, fontSize: 9, fontWeight: '900', letterSpacing: .8, textTransform: 'uppercase', marginBottom: 2 }, sourceThoughtText: { color: C.ink, fontSize: 12, lineHeight: 17, fontWeight: '600' }, taskTypeChoices: { gap: 8 }, taskType: { minHeight: 48, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskTypeSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, taskTypeTitle: { color: C.ink, fontSize: 14, fontWeight: '800', marginBottom: 2 }, taskPlanChoices: { flexDirection: 'row', gap: 8, marginTop: 9 }, taskPlanChoice: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, taskPlanChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, taskPlanChoiceText: { color: C.muted, fontSize: 11, fontWeight: '800', textAlign: 'center' }, taskPlanChoiceTextSelected: { color: C.accentText }, taskPlanChoiceDate: { color: C.muted, fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 3 }, dailyNote: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 13, backgroundColor: C.yellow, marginTop: 10 }, dailyNoteIcon: { color: C.accentText, fontSize: 12 }, dateRow: { flexDirection: 'row', gap: 10, marginTop: 14 }, dateButton: { flex: 1, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 13 }, taskDateButton: { flex: 0, marginTop: 9 }, dateLabel: { color: C.accentText, fontSize: 9, fontWeight: '800', letterSpacing: 1 }, dateValue: { color: C.ink, fontSize: 15, fontWeight: '700', marginTop: 4 }, pickerWrap: { marginTop: 8, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card }, pickerDoneButton: { minHeight: 48, justifyContent: 'center', alignItems: 'flex-end' }, pickerDone: { color: C.accentText, fontWeight: '800', textAlign: 'right', paddingHorizontal: 12 },
   makeSmallerButton: { flex: 0, marginTop: 12, backgroundColor: C.sagePale }, makeSmallerHint: { color: C.muted, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 6 }, stepEditor: { gap: 8, padding: 14, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.sagePale, marginTop: 12 }, stepEditorTitle: { color: C.ink, fontSize: 14, fontWeight: '800' }, stepEditorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, stepNumber: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: C.accentSolid }, stepNumberText: { color: C.white, fontSize: 10, fontWeight: '900' }, stepEditorInput: { flex: 1, minHeight: 48, paddingHorizontal: 11, fontSize: 13 }, removeStepButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: C.card }, removeStepText: { color: C.danger, fontSize: 22, lineHeight: 24 }, addStepButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 11, borderWidth: 1, borderStyle: 'dashed', borderColor: C.sage, backgroundColor: C.card, marginTop: 2 }, addStepText: { color: C.accentText, fontSize: 12, fontWeight: '800' },
   themeChoices: { flexDirection: 'row', gap: 8 }, themeChoice: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, themeChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, themeChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, themeChoiceTextSelected: { color: C.accentText, fontWeight: '900' },
-  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, securitySetting: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, healthSubSetting: { marginTop: 10, marginLeft: 14, backgroundColor: C.sagePale }, switchControl: { minWidth: 48, minHeight: 48 }, dailyStatusTimeSetting: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, dailyStatusTimeButton: { minWidth: 82, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: C.sagePale }, dailyStatusTimeText: { color: C.accentText, fontSize: 14, fontWeight: '900' }, lockDelaySetting: { padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, lockDelayChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, lockDelayChoice: { width: '48%', minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, lockDelayChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, lockDelayChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, lockDelayChoiceTextSelected: { color: C.accentText, fontWeight: '900' }, spacedButton: { marginTop: 12 }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, minHeight: 48, paddingVertical: 9, paddingLeft: 14, paddingRight: 8, borderRadius: 13, backgroundColor: C.toastBackground, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 20 }, toastText: { flex: 1, color: C.toastText, fontSize: 13, fontWeight: '600' }, toastAction: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#FFFFFF20' }, toastActionText: { color: C.white, fontSize: 12, fontWeight: '900' },
+  reminderStatus: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, statusDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.muted, marginTop: 4 }, statusDotOn: { backgroundColor: C.sage }, securitySetting: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, healthSubSetting: { marginTop: 10, marginLeft: 14, backgroundColor: C.sagePale }, switchControl: { minWidth: 48, minHeight: 48 }, dailyStatusTimeSetting: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, dailyStatusTimeButton: { minWidth: 82, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: C.sagePale }, dailyStatusTimeText: { color: C.accentText, fontSize: 14, fontWeight: '900' }, lockDelaySetting: { padding: 16, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, marginTop: 10 }, lockDelayChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, lockDelayChoice: { width: '48%', minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.paper }, lockDelayChoiceSelected: { borderColor: C.accentText, backgroundColor: C.sagePale }, lockDelayChoiceText: { color: C.muted, fontSize: 11, fontWeight: '700', textAlign: 'center' }, lockDelayChoiceTextSelected: { color: C.accentText, fontWeight: '900' }, spacedButton: { marginTop: 12 }, spacedText: { marginTop: 12 }, inlineStrong: { color: C.ink, fontWeight: '800' }, wideSecondary: { flex: 0 }, linkThoughtButton: { marginTop: 10 }, privacy: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 15 }, privacySummary: { padding: 16, borderRadius: 16, backgroundColor: C.sagePale, borderWidth: 1, borderColor: C.line }, policyText: { color: C.muted, fontSize: 13, lineHeight: 20 }, disclaimer: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 20, padding: 14, borderRadius: 13, backgroundColor: C.yellow }, toast: { position: 'absolute', left: 24, right: 24, bottom: 94, minHeight: 48, paddingVertical: 9, paddingLeft: 14, paddingRight: 8, borderRadius: 13, backgroundColor: C.toastBackground, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 20 }, toastText: { flex: 1, color: C.toastText, fontSize: 13, fontWeight: '600' }, toastAction: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#FFFFFF20' }, toastActionText: { color: C.white, fontSize: 12, fontWeight: '900' },
+  appointmentListChoices: { flexDirection: 'row', gap: 8, padding: 4, borderRadius: 16, backgroundColor: C.line, marginTop: 18 },
+  appointmentListChoice: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 8 },
+  appointmentListChoiceSelected: { backgroundColor: C.card },
+  appointmentListChoiceText: { color: C.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  appointmentListChoiceTextSelected: { color: C.accentText, fontWeight: '900' },
+  appointmentHistoryHint: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 11, paddingHorizontal: 4 },
+  calendarDayDotPast: { backgroundColor: C.muted },
+  pastAppointmentNote: { color: C.muted, fontSize: 11, lineHeight: 17, padding: 13, borderRadius: 13, backgroundColor: C.sagePale, marginTop: 15 },
+  appointmentPastLine: { color: C.muted },
 }); }

@@ -1,6 +1,6 @@
 # Gather Mind privacy policy
 
-Effective: 25 August 2026
+Effective: 7 September 2026
 
 Applies to: Gather Mind 0.5.0 and later until this policy is updated
 
@@ -8,7 +8,7 @@ Gather Mind is a local-first organisational app maintained by Nezar. It is desig
 
 ## Data collection and sharing
 
-Gather Mind does not collect, transmit, sell, or share personal data. It contains no advertising, third-party analytics, tracking SDK, cloud sync, or account system. The Android release does not request Internet access.
+Gather Mind's developer does not collect, receive, sell, or share the content or usage data described below. The app contains no advertising, third-party analytics, tracking SDK, cloud sync, or account system. It includes Android Internet access only for the optional release check described below.
 
 Thoughts, tags, goals, appointments, locations, appointment-plan items, and optional mood, sleep-quality, and period start/end entries are stored only in an encrypted database in the app's private storage on the user's device. Health tracking is off by default, and cycle tracking has a separate opt-in inside it. Turning either on does not transmit data or request access to another health service.
 
@@ -19,8 +19,17 @@ Reminder details and an optional generic count of unfinished goals are given to 
 - Notification permission is used only to show locally scheduled appointment reminders and the optional quiet daily goal status.
 - Exact-alarm access is used on Android only to deliver those chosen local times accurately.
 - Biometric authentication is used only on the device when the user enables **Lock Gather Mind**. The app does not receive or store fingerprint or face data.
+- Android Internet access is available solely for the optional automatic GitHub release check. Android treats this as an install-time normal permission, so it does not show a runtime permission prompt or per-app permission switch.
 
-The rest of the app remains usable if notification permission is denied. Health tracking requires no Android health permission, sensor permission, or Internet permission.
+The rest of the app remains usable if notification permission is denied. Health tracking requires no Android health permission or sensor permission and never uses the network.
+
+## Optional update checks
+
+Automatic update checks are off by default. If the user enables them in **Settings & privacy → App updates**, Gather Mind asks only `api.github.com` for the latest public Gather Mind release, at most once every 24 hours when the app opens or returns to the foreground. The response supplies a public version tag; Gather Mind does not run a background update service.
+
+The request contains no thoughts, tags, goals, appointments, locations, plan items, health entries, usage history, account identifier, or Gather Mind device identifier. Like any HTTPS request, it exposes ordinary connection information such as the user's IP address and request metadata to GitHub, which processes that information under its own terms. Gather Mind's developer does not receive update-check data.
+
+The manual update option works without enabling automatic checks. It opens the public GitHub releases page in the user's browser, so the browser—not Gather Mind—makes that connection.
 
 ## Retention and deletion
 
@@ -42,4 +51,4 @@ Gather Mind's source code is available under the Apache License 2.0. That softwa
 
 For non-sensitive privacy or support questions, open an issue in the project's [GitHub issue tracker](https://github.com/fezdk/gather_mind/issues). Do not include thoughts, goals, appointments, database files, device backups, biometric material, or other personal content in a public issue. Suspected vulnerabilities can be [reported privately through GitHub](https://github.com/fezdk/gather_mind/security/advisories/new).
 
-If Gather Mind later adds optional sync, accounts, analytics, or any other data transfer, this policy and the in-app notice must be updated before that feature is released.
+If Gather Mind later adds optional sync, accounts, analytics, or any data transfer beyond the release check described here, this policy and the in-app notice must be updated before that feature is released.

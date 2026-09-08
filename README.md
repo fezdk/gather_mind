@@ -1,10 +1,10 @@
 # Gather Mind
 
-Current source build: **0.6.1** · Application ID: `dk.fez.gathermind` · Latest Android beta: [v0.6.1](https://github.com/fezdk/gather_mind/releases/tag/v0.6.1)
+Current source build: **0.6.2** · Application ID: `dk.fez.gathermind` · Latest Android beta: [v0.6.2](https://github.com/fezdk/gather_mind/releases/tag/v0.6.2)
 
 Gather Mind is a calm, local-first Android app for anyone who wants a quieter way to catch thoughts, plan appointments, and choose manageable goals when life feels mentally crowded. It supports everyday cognitive overload, changing energy, brain fog, and executive-function challenges without making medical claims or attempting diagnosis.
 
-Everything entered in the native app stays on the phone. There is no account, backend, advertising, analytics, cloud sync, or Android Internet permission.
+Everything entered in the native app stays on the phone. There is no account, backend, advertising, analytics, or cloud sync. Optional update checks are off by default and read only the latest public version from GitHub; a manual browser check remains available without enabling them.
 
 ## Platform and project status
 
@@ -39,6 +39,7 @@ Everything entered in the native app stays on the phone. There is no account, ba
 ### Appointments
 
 - Store an appointment's date, time, place or person, and local reminder choice.
+- Switch between upcoming and past dated agendas; historical appointments remain available newest-first and can be opened or corrected with their plans and linked thoughts intact.
 - Keep questions, decisions, documents, errands, things to bring, and follow-ups in a flexible appointment plan.
 - Schedule reminders through the phone's operating system and open the relevant appointment when a reminder is tapped.
 - Reconcile missing future reminders locally when the app starts.
@@ -63,11 +64,12 @@ Everything entered in the native app stays on the phone. There is no account, ba
 - Support TalkBack with named controls, form labels, selection and checkbox states, modal focus, live Undo/result announcements, and non-gesture actions for moving goals to tomorrow or earlier/later in the list.
 - Keep interactive targets at least 48 dp, preserve 4.5:1 normal-text contrast on shared surfaces and move colours, follow reduced-motion settings, and replace the geometric thought map at large font sizes.
 - Disable Android cloud backup and provide an in-app control that deletes all local content and cancels scheduled notifications.
-- Keep the widget’s bounded local summary encrypted separately with Android Keystore and remove it with **Delete all local data**; the widget adds no account, network request, or Internet permission.
+- Keep the widget’s bounded local summary encrypted separately with Android Keystore and remove it with **Delete all local data**; the widget itself makes no network request.
+- Offer a clearly explained, default-off automatic release check against GitHub at most once daily when the app is active. The manual option opens the public releases page in the browser while all user content remains local.
 
 ## Install the Android beta
 
-Download `Gather-Mind-0.6.1.apk` from the [v0.6.1 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.1). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
+Download `Gather-Mind-0.6.2.apk` from the [v0.6.2 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.2). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data.
 
 The beta certificate is not the future Google Play production credential. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for the local APK and EAS/Play release paths.
 
@@ -160,4 +162,4 @@ The working product rationale and queued ideas are documented in [`docs/product-
 
 ## Licence, privacy, and support
 
-Gather Mind is licensed under the [Apache License 2.0](LICENSE). The publishable [privacy policy](docs/privacy.html), [support page](docs/support.html), [security reporting policy](SECURITY.md), and [Google Play disclosure draft](mobile/store/google-play.md) describe the current local-only behavior.
+Gather Mind is licensed under the [Apache License 2.0](LICENSE). The publishable [privacy policy](docs/privacy.html), [support page](docs/support.html), [security reporting policy](SECURITY.md), and [Google Play disclosure draft](mobile/store/google-play.md) describe the current local-first behavior and the optional GitHub release check.

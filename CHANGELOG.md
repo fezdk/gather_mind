@@ -2,8 +2,11 @@
 
 All notable Gather Mind changes are documented here.
 
-## Unreleased
+## 0.6.2 — 2026-09-08
 
+- Added a default-off automatic update check in Settings that reads only the latest public GitHub release at most once daily while the app is active, reports a newer version once, and retains a manual browser-only check that does not enable in-app network use.
+- Updated Android configuration and privacy disclosures for the narrowly scoped GitHub connection while keeping thoughts, goals, appointments, health entries, widget data, and usage data strictly on-device.
+- Added an Upcoming/Past calendar switch to Appointments so historical appointments remain available newest-first with their plans and linked thoughts, can be opened and edited, and never claim to have an active reminder.
 - Added persistent manual ordering for Today goals: hold the dedicated handle and drag a goal into place, including recurring morning/evening routines that keep their relative position on later days.
 - Kept horizontal complete/defer swipes separate from the reorder handle, and exposed equivalent TalkBack move-earlier/move-later actions with position feedback.
 - Migrated existing encrypted goals to explicit stable sort positions while preserving their previous saved order.

@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.6.1
+# Google Play listing and declarations — Gather Mind 0.6.2
 
 ## Product identity
 
@@ -16,7 +16,7 @@ Build a gentle daily list, optionally break larger goals into smaller checkable 
 
 Add appointments, choose local reminders, and keep questions, decisions, documents, errands, things to bring, and follow-ups together in a readable appointment plan.
 
-Gather Mind works offline. There is no account, advertising, analytics, or cloud backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics. A resizable Android home-screen widget can show today’s count and, only after an explicit privacy choice, goal and appointment context.
+Gather Mind works offline. There is no account, advertising, analytics, or cloud backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics. A resizable Android home-screen widget can show today’s count and, only after an explicit privacy choice, goal and appointment context. Automatic update checks are off by default; if enabled, the app reads only the latest public version from GitHub.
 
 Choose a light or dark appearance, or let Gather Mind follow your phone automatically.
 
@@ -28,7 +28,7 @@ Gather Mind is an organisational aid, not a medical device. It does not diagnose
 
 - Ads: No.
 - App access: No account or default restricted area. The optional biometric app lock is off on a fresh installation and has no developer-issued credential.
-- Data safety: No data collected and no data shared. All user content, including optional mood, sleep-quality, and period start/end entries, is processed locally on the device, and the Android release does not request Internet access.
+- Data safety: No app content or usage data is collected or shared. All user content, including optional mood, sleep-quality, and period start/end entries, is processed locally on the device. The default-off automatic update check contacts GitHub's public release API only for the latest version; GitHub receives ordinary network metadata such as an IP address. Reassess Play's current Data safety form against this exact third-party network behavior before submission.
 - Account deletion: Not applicable because no account can be created. Health history can be cleared separately; the in-app **Delete all local data** control erases all content, the encrypted widget summary, and reminders.
 - Privacy-policy URL: host the project-level `docs/privacy.html` at a stable public HTTPS URL and enter it in Play Console.
 - Support URL: host the project-level `docs/support.html` at a stable public HTTPS URL.

@@ -28,7 +28,8 @@ test('Health UI keeps estimates bounded and provides local deletion and medical 
   assert.match(appSource, /Health tracking requires no Android health permission/);
 });
 
-test('adding Health does not grant Android Internet access', () => {
-  assert.ok(appJson.expo.android.blockedPermissions.includes('android.permission.INTERNET'));
-  assert.ok(!appJson.expo.android.permissions.includes('android.permission.INTERNET'));
+test('Health remains local when optional release checks use Android Internet access', () => {
+  assert.ok(appJson.expo.android.permissions.includes('android.permission.INTERNET'));
+  assert.match(appSource, /Health tracking requires no Android health permission or sensor permission and never uses the network/);
+  assert.match(appSource, /It sends no app content, health data, usage history/);
 });

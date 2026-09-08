@@ -23,7 +23,7 @@ The app should remain calm, local-first, understandable without setup, and usefu
 
 ## Implementation status
 
-Included through the 0.6.1 source build:
+Included through the 0.6.2 source build:
 
 - Optional, default-off Health navigation with immediate 1–5 mood/sleep check-ins and a separate cycle-tracking opt-in. Period records support start and optional end dates, recorded-duration and start-to-start timing summaries, a simple median-based local estimate, and a five-day Today heads-up. Health history remains encrypted locally, can be cleared separately, and is excluded from widgets and notifications.
 
@@ -173,7 +173,7 @@ Delete can continue to use an explicit confirmation dialog. Undo is most valuabl
 
 ### Current state
 
-App content is stored in a SQLCipher-encrypted SQLite database. A random 256-bit database key is generated on the device and stored in the operating system's secure key store without biometric binding. Android cloud backup remains disabled and Android Internet permission remains blocked.
+App content is stored in a SQLCipher-encrypted SQLite database. A random 256-bit database key is generated on the device and stored in the operating system's secure key store without biometric binding. Android cloud backup remains disabled. General Internet access is present only for a default-off, at-most-daily lookup of the latest public GitHub release while the app is active; the setting explains the connection, and a browser-only manual check remains available without opting in. No entered content or usage data is part of the request.
 
 Existing beta data is migrated copy-first: Gather Mind reads the previous plaintext key-value record, writes and reads back the encrypted copy, and only then deletes and vacuums the old value. Physical update testing is still release-blocking before this can ship.
 

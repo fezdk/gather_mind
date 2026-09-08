@@ -1,10 +1,12 @@
-# Gather Mind mobile 0.6.1
+# Gather Mind mobile 0.6.2
 
-This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required.
+This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required for its organisational features. A separate automatic GitHub release check is off by default.
 
 New installations start empty. Existing beta data is copied into the encrypted database and verified before the old plaintext value is scrubbed. The gear button opens appearance and reminder settings, an optional biometric **Lock Gather Mind** control, the in-app privacy summary and support guidance, and a confirmed full-data deletion control. Full deletion cancels reminders as well as erasing all app content.
 
 Bottom navigation remains available on ordinary app pages, including appointment details. The active destination uses the same icon highlight across Today, Appointments, Thoughts, and optional Health; modal create/edit sheets remain focused overlays.
+
+Appointments has separate **Upcoming** and **Past** dated agendas. Past entries stay available newest-first with their plans and linked thoughts, return to the same calendar after opening, and can be corrected without scheduling another reminder.
 
 The Today screen also includes a daily goal list:
 
@@ -39,7 +41,7 @@ Today deliberately does not repeat a partial thought list. Its capture action re
 - A period has a user-selected first day and optional last day. Start/end history shows recorded duration and can be edited or removed individually; **Clear health history** removes all mood, sleep, and period entries without changing either switch.
 - An estimate requires at least two usefully spaced starts. It uses the median of up to six recent start-to-start intervals, reports recent variation without labelling it normal or abnormal, and never predicts fertility or ovulation. Completed start/end entries provide a separate typical recorded period length.
 - Today shows the estimate only from five days before through the estimated date. The app clearly states that cycle timing is not contraception, diagnosis, treatment, or a basis for medical decisions.
-- Health entries stay in the encrypted app database and are never copied to the widget, notifications, analytics, a backend, or network traffic. No Android health permission or Internet permission is requested.
+- Health entries stay in the encrypted app database and are never copied to the widget, notifications, analytics, a backend, or network traffic. No Android health or sensor permission is requested.
 
 ## Android home-screen widget
 
@@ -55,6 +57,14 @@ Today deliberately does not repeat a partial thought list. Its capture action re
 - Follow device is the default and updates when Android or iOS changes appearance.
 - A manual choice applies to the full app, including sheets, inputs, navigation, the privacy cover, biometric lock screen, and status bars.
 - The preference is stored only on this phone and requires no account, analytics, or internet access.
+
+## App updates
+
+- **Settings & privacy → App updates** explains the network behavior before anything is enabled.
+- Automatic checks are off by default. If enabled, Gather Mind asks only GitHub's public release API for the latest version, at most once every 24 hours when the app opens or returns to the foreground. It does not run a background service or send user content, health data, usage history, or a Gather Mind identifier.
+- Android treats Internet access as an install-time normal permission, so there is no runtime Android permission dialog or system permission switch. The in-app setting controls whether Gather Mind itself performs the request.
+- **Check manually in browser** is always available and works with automatic checks off. That opens the public GitHub releases page, so the browser—not Gather Mind—makes the request.
+- When an automatic check finds a newer semantic-versioned release, the app gives one in-app notice for that version and keeps the release available in Settings.
 
 ## Accessibility
 
