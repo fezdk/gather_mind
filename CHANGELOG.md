@@ -2,6 +2,10 @@
 
 All notable Gather Mind changes are documented here.
 
+## Unreleased
+
+- Fixed Android date/time pickers becoming unavailable after switching apps with an appointment calendar open. Interrupted dialogs now close without changing the form, stale native dialogs are cleared before reopening, and late callbacks cannot affect another editor. The shared fix also covers goal dates, Health dates, and the daily-status time picker.
+
 ## 0.6.2 — 2026-09-08
 
 - Added a default-off automatic update check in Settings that reads only the latest public GitHub release at most once daily while the app is active, reports a newer version once, and retains a manual browser-only check that does not enable in-app network use.
