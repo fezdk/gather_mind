@@ -22,6 +22,8 @@ npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 
 Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, future one-off planning without a false move count, future first dates plus daily/weekly/monthly recurrence and move limits, move-to-tomorrow confirmation, and **Delete all local data**.
 
+For appointment create/edit, open the date picker, switch apps, return, and reopen the date picker in both the same and another appointment. Repeat for time, with app lock off, within its grace period, and after locking. Confirm unconfirmed picker values do not alter the date or overwrite unsaved title/place text. Also repeat the interruption with a goal date, Health date, and quiet-status time picker.
+
 Widget checks must cover launcher discovery, compact and expanded resizing, immediate updates after goal/appointment changes, midnight/date changes, counts-only and opted-in title modes, light/dark system appearance, taps through an enabled app lock, stale deleted-item links, and removal of the encrypted widget summary by **Delete all local data**. Test at least one Pixel-style and one Samsung launcher before release.
 
 For every form with an explicit save action—thought, goal, appointment, and appointment-plan item—change one value and try the close button, Android hardware back, and TalkBack escape. Confirm each route offers to keep editing or discard the unsaved change, while opening and closing an unchanged form does not warn. Confirm existing goal-step edits still save on blur and do not produce a false warning after that save.

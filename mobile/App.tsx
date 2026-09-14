@@ -3,7 +3,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Application from 'expo-application';
 import * as Notifications from 'expo-notifications';
 import * as SystemUI from 'expo-system-ui';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from './src/DateTimePicker';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Alert, Animated, Appearance, AppState as NativeAppState, BackHandler, findNodeHandle, Keyboard, KeyboardAvoidingView, LayoutAnimation, Linking, Modal, PanResponder,
