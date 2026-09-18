@@ -2,6 +2,11 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.6.4 — 2026-09-18
+
+- Simplified update settings and confirmation copy: one primary check/install/restart action, a short automatic-check explanation, and a browser fallback. Technical disclosures remain available through Privacy details; consent, default-off checks and signature verification are unchanged.
+- Made the Settings heading use the actual app version instead of a stale hard-coded number.
+
 ## 0.6.3 — 2026-09-18 (OTA baseline)
 
 - Added a dry-run-first release script that verifies APK identity/signing, requires the pushed source tag, verifies GitHub asset digests, and optionally activates a signed OTA after public asset verification. Existing release files are never overwritten.

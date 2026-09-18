@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.6.3
+# Gather Mind mobile 0.6.4
 
 This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required for its organisational features. A separate automatic GitHub release check is off by default.
 
@@ -70,7 +70,7 @@ Today deliberately does not repeat a partial thought list. Its capture action re
 
 ## App updates
 
-- Source includes locally signed OTA installation with a pinned certificate, explicit consent, privacy-filtered native requests and browser fallback. A new native APK is required to bootstrap it; physical-device QA is still pending. Follow the [release/signing recipe](../README.md#signed-ota-updates-and-release-rollout) for local packaging and atomic server activation. This is separate from APK signing.
+- Version 0.6.3 is the native baseline for locally signed OTA installation with a pinned certificate, explicit consent, privacy-filtered native requests and browser fallback. Version 0.6.4 is the first compatible OTA test release; physical-device QA is still pending. Earlier APKs need a new native install to bootstrap the engine. Follow the [release/signing recipe](../README.md#signed-ota-updates-and-release-rollout) for local packaging and atomic server activation. This is separate from APK signing.
 - **Settings & privacy → App updates** explains the network behavior before anything is enabled.
 - Automatic checks are off by default. If enabled, Gather Mind asks only GitHub's public release API for the latest version, at most once every 24 hours when the app opens or returns to the foreground. It does not run a background service or send user content, health data, usage history, or a Gather Mind identifier.
 - Android treats Internet access as an install-time normal permission, so there is no runtime Android permission dialog or system permission switch. The in-app setting controls whether Gather Mind itself performs the request.

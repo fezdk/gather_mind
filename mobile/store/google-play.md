@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.6.3
+# Google Play listing and declarations — Gather Mind 0.6.4
 
 ## Product identity
 

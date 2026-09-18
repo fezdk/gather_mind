@@ -51,7 +51,7 @@ test('install actions preserve content and cannot silently reload an editor afte
   assert.match(restart, /updateModalRef.current/);
   assert.match(restart, /NativeAppState.currentState !== 'active'/);
   assert.match(app, /Connect to check for an update\?/);
-  assert.match(app, /Check manually in browser/);
+  assert.match(app, /Check in browser/);
 });
 test('restart waits for verified saves and refuses reload after lock, leaving settings, or save failure', async () => {
   const calls = [];

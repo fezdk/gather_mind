@@ -13,6 +13,7 @@ mobile/modules/*/android/build/
 mobile/modules/*/android/.gradle/
 
 # Build products and local caches
+/releases/
 *.aab
 *.apk
 *.ipa

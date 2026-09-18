@@ -279,7 +279,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       return release;
     } catch (error) {
       console.warn('Could not check GitHub for a Gather Mind update', error);
-      if (mountedRef.current) setUpdateCheckError('Could not reach GitHub. You can still check manually in your browser.');
+      if (mountedRef.current) setUpdateCheckError('Could not check for updates. Try again later.');
       return null;
     } finally {
       updateCheckBusyRef.current = false;
@@ -312,15 +312,15 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     if (otaBusyRef.current || lockStatusRef.current !== 'unlocked') return;
     otaBusyRef.current = true;
     setOtaBusy(true);
-    setOtaStatus('Checking for a signed, compatible update…');
+    setOtaStatus('Checking for updates…');
     try {
       const candidate = await findOtaUpdate(Updates, APP_VERSION);
       if (!mountedRef.current) return;
       setOtaCandidate(candidate);
       setOtaStatus(candidate ? `Version ${candidate.version} is ready to download.`
-        : 'No compatible in-app update is available. A newer native version may still be available on GitHub.');
+        : 'No in-app update found. Other updates may be available in the browser.');
     } catch {
-      setOtaStatus('The update could not be checked. Try again, or use the browser option below.');
+      setOtaStatus('Could not check for updates. Try again or open the browser.');
     } finally {
       otaBusyRef.current = false;
       if (mountedRef.current) setOtaBusy(false);
@@ -329,7 +329,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
 
   function requestOtaCheck() {
     Alert.alert('Connect to check for an update?',
-      'Gather Mind will contact gathermind.control.dk via Cloudflare. Installing an update also downloads files from GitHub and its release-asset CDN. These services see your IP address. No personal content, device identifier, or usage history is sent. This does not enable automatic downloads.',
+      'Use the internet to check for updates? Your content stays on this phone. Nothing downloads until you choose Install.',
       [{ text: 'Cancel', style: 'cancel' }, { text: 'Find updates', onPress: () => void checkOta() }]);
   }
 
@@ -373,10 +373,10 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       if (!mountedRef.current) return;
       setOtaCandidate(installed);
       setOtaReady(true);
-      setOtaStatus(`Version ${installed.version} is verified. Restart now to use it, or it will apply next time the app starts.`);
+      setOtaStatus(`Version ${installed.version} is ready. Restart now or next time you open the app.`);
       downloaded = true;
     } catch {
-      setOtaStatus('The update could not be downloaded and verified. Nothing was restarted. Try again or open GitHub in your browser.');
+      setOtaStatus('Could not install the update. Your current version is unchanged. Try again or open the browser.');
     } finally {
       otaBusyRef.current = false;
       if (mountedRef.current) setOtaBusy(false);
@@ -1681,7 +1681,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
     <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} updateAvailable={!!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION)} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onUpdates={() => { setReminderModal(false); setUpdateModal(true); }} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
-    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckNow={() => void runAutomaticUpdateCheck(true)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} otaCandidate={otaCandidate} otaStatus={otaStatus} otaBusy={otaBusy} otaReady={otaReady} onFindOta={requestOtaCheck} onInstallOta={() => void installOta()} onRestartOta={() => void restartForOta()} />
+    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} onPrivacy={() => { setUpdateModal(false); setPrivacyModal(true); }} otaCandidate={otaCandidate} otaStatus={otaStatus} otaBusy={otaBusy} otaReady={otaReady} onFindOta={requestOtaCheck} onInstallOta={() => void installOta()} onRestartOta={() => void restartForOta()} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -2760,7 +2760,7 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
     if (event.type === 'dismissed' || !value) return;
     onDailyStatusMinutesChange(value.getHours() * 60 + value.getMinutes());
   }
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Gather Mind 0.6.2" title="Settings & privacy">
+  return <Sheet visible={visible} onClose={onClose} eyebrow={`Gather Mind ${APP_VERSION}`} title="Settings & privacy">
     <Field heading>Appearance</Field>
     <View style={s.themeChoices}>{THEME_MODE_OPTIONS.map((option) => <Pressable key={option.value} style={[s.themeChoice, themeMode === option.value && s.themeChoiceSelected]} onPress={() => onThemeModeChange(option.value)} accessibilityRole="radio" accessibilityState={{ checked: themeMode === option.value }} accessibilityLabel={`Appearance: ${option.label}`}><Text style={[s.themeChoiceText, themeMode === option.value && s.themeChoiceTextSelected]}>{option.label}</Text></Pressable>)}</View>
     <Text style={s.privacy}>Follow device changes automatically with your phone’s light or dark appearance.</Text>
@@ -2789,8 +2789,8 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
     </View>}
     <Text style={s.privacy}>The encryption key stays in this device’s secure key store and is not tied to your biometric profile. Removing all enrolled biometrics can temporarily block the app until you add one again.</Text>
     <Field heading>App updates</Field>
-    <View style={s.privacySummary}><Text style={s.cardTitle}>{updateAvailable ? 'A newer version is available' : `Installed version ${APP_VERSION}`}</Text><Text style={s.small}>Automatic checks are optional and off by default. Open the update settings to see exactly when Gather Mind contacts GitHub.</Text></View>
-    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onUpdates} accessibilityRole="button"><Text style={s.secondaryText}>{updateAvailable ? 'View available update' : 'Update check options'}</Text></Pressable>
+    <View style={s.privacySummary}><Text style={s.cardTitle}>{updateAvailable ? 'A newer version is available' : `Installed version ${APP_VERSION}`}</Text><Text style={s.small}>Choose when to check and install.</Text></View>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onUpdates} accessibilityRole="button"><Text style={s.secondaryText}>{updateAvailable ? 'View available update' : 'Manage updates'}</Text></Pressable>
     <Field heading>Privacy & support</Field>
     <View style={s.privacySummary}><Text style={s.cardTitle}>Private and encrypted by default</Text><Text style={s.small}>Your content stays encrypted on this phone. Gather Mind has no account, ads, analytics, backend, or remote sync.</Text></View>
     <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onPrivacy} accessibilityRole="button"><Text style={s.secondaryText}>Read privacy & support</Text></Pressable>
@@ -2814,41 +2814,35 @@ type UpdateSettingsModalProps = {
   error: string | null;
   onClose: () => void;
   onEnabledChange: (enabled: boolean) => void;
-  onCheckNow: () => void;
+  onPrivacy: () => void;
   onCheckInBrowser: () => void;
   onOpenRelease: (release: LatestRelease) => void;
 };
 
-function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onCheckNow, onCheckInBrowser, onOpenRelease, otaCandidate, otaStatus, otaBusy, otaReady, onFindOta, onInstallOta, onRestartOta }: UpdateSettingsModalProps) {
+function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onPrivacy, onCheckInBrowser, onOpenRelease, otaCandidate, otaStatus, otaBusy, otaReady, onFindOta, onInstallOta, onRestartOta }: UpdateSettingsModalProps) {
   const { C, s } = useAppTheme();
   const updateAvailable = !!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION);
   const status = error
     ?? (updateAvailable
-      ? `Version ${latestRelease.version} is available. This phone has ${APP_VERSION}.`
+      ? `Version ${latestRelease.version} is available.`
       : latestRelease
         ? `Version ${APP_VERSION} is up to date.`
         : enabled
-          ? 'No automatic check has completed yet.'
+          ? 'Not checked yet.'
           : 'Automatic checks are off.');
   return <Sheet visible={visible} onClose={onClose} eyebrow={`Installed version ${APP_VERSION}`} title="App updates">
-    <View style={s.privacySummary}><Text style={s.cardTitle}>Your content is never part of an update check</Text><Text style={s.small}>Thoughts, goals, appointments, health entries, identifiers, and usage data stay on this phone.</Text></View>
-    <Field heading>Install in the app</Field>
-    <Text style={s.policyText}>With your permission, check gathermind.control.dk for a signed update. Downloads come from GitHub and its release-asset CDN. Install downloads, verifies and restarts this app when it is safe; if you leave this screen, the update applies next time the app starts. Native changes still need an APK from the browser. Nothing downloads automatically.</Text>
+    <Text style={s.policyText}>Updates use the internet. Your content stays on this phone.</Text>
     {otaStatus && <Text style={[s.policyText, s.spacedText]} accessibilityLiveRegion="polite">{otaStatus}</Text>}
     {otaBusy && <ActivityIndicator color={C.accentText} accessibilityLabel="Working on the update" />}
-    {!otaReady && <Primary label="Find updates" onPress={onFindOta} disabled={otaBusy} />}
+    {!otaCandidate && !otaReady && <Primary label="Find updates" onPress={onFindOta} disabled={otaBusy} />}
+    {otaCandidate && !otaReady && <Text style={[s.small, s.spacedText]}>Installing saves your work and restarts the app.</Text>}
     {otaCandidate && !otaReady && <Primary label={`Install version ${otaCandidate.version}`} onPress={onInstallOta} disabled={otaBusy} />}
     {otaReady && <Primary label="Restart with update" onPress={onRestartOta} disabled={otaBusy} />}
     <Field heading>Automatic checks</Field>
-    <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Check GitHub for new releases</Text><Text style={s.small}>When enabled, Gather Mind asks GitHub for the latest public release at most once every 24 hours when you open or return to the app. It does not run a background service.</Text></View><Switch style={s.switchControl} value={enabled} onValueChange={onEnabledChange} disabled={busy} trackColor={{ false: C.line, true: C.sage }} thumbColor={enabled ? C.accentSolid : C.white} accessibilityLabel="Automatically check GitHub for Gather Mind updates" /></View>
-    <Text style={s.policyText}>Android grants apps general Internet access when they are installed; it does not show a runtime permission prompt or provide a per-app permission switch for it. This Gather Mind setting is the control over whether the app itself uses that access for update checks.</Text>
-    <Text style={[s.policyText, s.spacedText]}>An automatic check contacts only <Text style={s.inlineStrong}>api.github.com</Text> over HTTPS and reads the public release version. GitHub receives ordinary connection information such as your IP address and request metadata. Gather Mind’s developer receives no update-check data.</Text>
-    <View style={[s.reminderStatus, s.spacedButton]}><View style={[s.statusDot, updateAvailable && s.statusDotOn]} importantForAccessibility="no" /><View style={s.flex}><Text style={s.cardTitle} accessibilityLiveRegion="polite">{busy ? 'Checking GitHub…' : status}</Text>{lastCheckedAt && <Text style={s.small}>Last attempted {updateCheckTime.format(new Date(lastCheckedAt))}</Text>}</View>{busy && <ActivityIndicator color={C.accentText} />}</View>
-    {enabled && <Primary label={busy ? 'Checking…' : 'Check now'} onPress={onCheckNow} disabled={busy} />}
-    {updateAvailable && latestRelease && <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => onOpenRelease(latestRelease)} accessibilityRole="link"><Text style={s.secondaryText}>Open Gather Mind {latestRelease.version}</Text></Pressable>}
-    <Field heading>Manual check</Field>
-    <Text style={s.policyText}>You can leave automatic checks off and open the public releases page in your browser instead. In that case Gather Mind makes no network request; your browser handles the connection to GitHub.</Text>
-    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onCheckInBrowser} accessibilityRole="link"><Text style={s.secondaryText}>Check manually in browser</Text></Pressable>
+    <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Tell me about new versions</Text><Text style={s.small}>Check GitHub once a day when you use the app. No automatic downloads.</Text></View><Switch style={s.switchControl} value={enabled} onValueChange={onEnabledChange} disabled={busy} trackColor={{ false: C.line, true: C.sage }} thumbColor={enabled ? C.accentSolid : C.white} accessibilityLabel="Tell me about new versions" /></View>
+    {enabled && <View style={[s.reminderStatus, s.spacedButton]}><View style={[s.statusDot, updateAvailable && s.statusDotOn]} importantForAccessibility="no" /><View style={s.flex}><Text style={s.cardTitle} accessibilityLiveRegion="polite">{busy ? 'Checking…' : status}</Text>{lastCheckedAt !== null && <Text style={s.small}>Last attempted {updateCheckTime.format(new Date(lastCheckedAt))}</Text>}</View>{busy && <ActivityIndicator color={C.accentText} />}</View>}
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={updateAvailable && latestRelease ? () => onOpenRelease(latestRelease) : onCheckInBrowser} accessibilityRole="link"><Text style={s.secondaryText}>{updateAvailable && latestRelease ? `View version ${latestRelease.version} in browser` : 'Check in browser'}</Text></Pressable>
+    <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={onPrivacy} accessibilityRole="button"><Text style={s.secondaryText}>Privacy details</Text></Pressable>
   </Sheet>;
 }
 
