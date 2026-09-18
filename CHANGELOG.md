@@ -2,6 +2,10 @@
 
 All notable Gather Mind changes are documented here.
 
+## 0.6.5 — 2026-09-18
+
+- Smoothed OTA restarts with a brief visible transition and a theme-matched native reload screen, respecting reduced motion. Leaving or locking the app during the transition still cancels the immediate restart; content and drafts are saved before reloading.
+
 ## 0.6.4 — 2026-09-18
 
 - Simplified update settings and confirmation copy: one primary check/install/restart action, a short automatic-check explanation, and a browser fallback. Technical disclosures remain available through Privacy details; consent, default-off checks and signature verification are unchanged.

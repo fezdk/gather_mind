@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gather Mind",
     "slug": "gather-mind",
-    "version": "0.6.4",
+    "version": "0.6.5",
     "runtimeVersion": "gathermind-android-1-data-8",
     "updates": {
       "url": "https://gathermind.control.dk/manifest",
@@ -26,14 +26,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "dk.fez.gathermind",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "dk.fez.gathermind",
-      "versionCode": 19,
+      "versionCode": 20,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [

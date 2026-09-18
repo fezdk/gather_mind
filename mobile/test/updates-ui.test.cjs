@@ -35,7 +35,7 @@ function text(node) {
   if (Array.isArray(node)) return node.map(text).join(' ');
   return [node.props?.label, text(node.props?.children)].filter(Boolean).join(' ');
 }
-const defaults = { visible: true, enabled: false, busy: false, lastCheckedAt: null,
+const defaults = { visible: true, enabled: false, busy: false, otaRestarting: false, lastCheckedAt: null,
   latestRelease: null, error: null, otaCandidate: null, otaStatus: null, otaBusy: false, otaReady: false };
 
 test('Settings keeps automatic update checks explicit and manual browser checks independent', () => {
@@ -98,6 +98,17 @@ test('short check confirmation still requires an explicit choice before networki
   assert.equal(dialog[2][0].onPress, undefined);
   dialog[2][1].onPress();
   assert.equal(checks, 1);
+});
+
+test('restart transition replaces settings controls with a short status while retaining safe close', () => {
+  let closed = 0;
+  const tree = render({ ...defaults, otaRestarting: true, onClose() { closed++; } });
+  assert.match(tree.props.title, /Update ready. Restarting/);
+  assert.match(text(tree), /Opening the updated app/);
+  assert.ok(nodes(tree).find(n => n.props?.accessibilityLiveRegion === 'polite'));
+  assert.equal(nodes(tree).some(n => ['Primary', 'Pressable', 'Switch'].includes(n.type)), false);
+  tree.props.onClose();
+  assert.equal(closed, 1);
 });
 
 test('automatic status and errors appear only with opt-in; newer releases keep the browser route', () => {

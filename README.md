@@ -1,6 +1,6 @@
 # Gather Mind
 
-Current Android beta: **0.6.4** · Application ID: `dk.fez.gathermind` · [GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.4)
+Current Android beta: **0.6.5** · Application ID: `dk.fez.gathermind` · [GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.5)
 
 Gather Mind is a calm, local-first Android app for anyone who wants a quieter way to catch thoughts, plan appointments, and choose manageable goals when life feels mentally crowded. It supports everyday cognitive overload, changing energy, brain fog, and executive-function challenges without making medical claims or attempting diagnosis.
 
@@ -70,7 +70,7 @@ Everything entered in the native app stays on the phone. There is no account, co
 
 ## Install the Android beta
 
-Download `Gather-Mind-0.6.4.apk` from the [v0.6.4 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.4). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data. Version 0.6.3 can also install this compatible update from **Settings → App updates → Find updates**.
+Download `Gather-Mind-0.6.5.apk` from the [v0.6.5 GitHub release](https://github.com/fezdk/gather_mind/releases/tag/v0.6.5). The current sideload beta uses the same beta signing certificate as earlier 0.5.x APKs, so it can update those installations without clearing local app data. Versions 0.6.3 and 0.6.4 can also install this compatible update from **Settings → App updates → Find updates**.
 
 The beta certificate is not the future Google Play production credential. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for the local APK and EAS/Play release paths.
 
@@ -143,7 +143,7 @@ The authoritative agent workflow and complete physical-device QA list are in [`A
 
 ## Signed OTA updates and release rollout
 
-**Status:** 0.6.4 is the first signed OTA test release for the 0.6.3 baseline APK. It simplifies the update settings without changing native dependencies, the trust certificate or storage schema. Use **Find updates → Install version 0.6.4** to test the full flow. Existing 0.6.2 APKs need a new APK first because they cannot bootstrap the update engine or pinned certificate through JavaScript. Physical-device update/recovery QA is still required before production OTA rollout.
+**Status:** installation of the first signed OTA, 0.6.3 → 0.6.4, was confirmed on a physical Android phone. Version 0.6.5 adds a short restart status and theme-matched native reload screen for subsequent updates, with reduced-motion support. Installing this improvement is still controlled by the previous version's restart UI. Use **Find updates → Install version 0.6.5**; no native dependencies, trust certificate or storage schema changed. Existing 0.6.2 APKs need a new APK first because they cannot bootstrap the update engine or pinned certificate through JavaScript. Further physical-device transition and failure/recovery QA is still required before production OTA rollout.
 
 Automatic checks still only query GitHub for a release version; they never download code. An explicit in-app check asks permission to contact the manifest host (behind Cloudflare). Installation fetches GitHub release assets, verifies the pinned RSA signature and SHA-256 hashes, saves local state/drafts, and restarts when the app is unlocked, foregrounded, and still in update settings. If you leave, a verified download applies on the next app start. Browser fallback remains available offline/after failure/without opting in; native changes still require an APK.
 

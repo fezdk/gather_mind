@@ -38,7 +38,9 @@ a guarantee that the host or app has no security vulnerabilities.
    Upgrade to a [supported PHP branch](https://www.php.net/supported-versions.php)
    and rerun syntax, Apache and public/origin checks before production OTA use.
    This task did not upgrade the shared server or change unrelated sites.
-2. Physical Android end-to-end validation remains required: signature failure,
+2. The user confirmed a successful 0.6.3 → 0.6.4 OTA installation on a physical
+   Android phone on 18 September 2026; the automatic restart felt abrupt.
+   Further physical Android end-to-end validation remains required: signature failure,
    altered asset, runtime mismatch, interrupted downloads, cold launch/recovery,
    app lock and draft retention. Automated/source checks cannot replace it.
 3. `npm audit` reports 21 dependency findings (11 high, 10 moderate), largely

@@ -6,7 +6,7 @@ const ts = require('typescript');
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, file);
-const { compatibleOtaCandidate, findOtaUpdate, downloadOtaUpdate, restartOtaSafely } = require('../src/ota.ts');
+const { compatibleOtaCandidate, findOtaUpdate, downloadOtaUpdate, restartOtaSafely, otaReloadScreenOptions } = require('../src/ota.ts');
 const manifest = { id: 'dfc73385-533c-4463-88c5-3f65e215cbd6', runtimeVersion: 'native-test', metadata: { appVersion: '0.6.3' } };
 test('OTA only offers newer signed-engine results for the same runtime', async () => {
   assert.equal(compatibleOtaCandidate(null, 'native-test', '0.6.2'), null);
@@ -50,8 +50,48 @@ test('install actions preserve content and cannot silently reload an editor afte
   assert.match(restart, /saveDraft: \(\) => saveEditorDraft\(editorDraftRef.current\)/);
   assert.match(restart, /updateModalRef.current/);
   assert.match(restart, /NativeAppState.currentState !== 'active'/);
+  assert.match(restart, /prepareReload: async/);
+  assert.match(restart, /Update ready\. Restarting/);
+  assert.match(restart, /reloadScreenOptions: otaReloadScreenOptions\(C.paper, C.accentText, reduceMotion\)/);
+  assert.match(restart, /if \(!restarting\) \{\s*otaBusyRef.current = false/);
   assert.match(app, /Connect to check for an update\?/);
   assert.match(app, /Check in browser/);
+});
+
+test('reload screen follows light/dark appearance without remote assets and respects reduced motion', () => {
+  for (const [paper, accent] of [['#F7F3EA', '#416555'], ['#17211D', '#BCD9C7']]) {
+    const normal = otaReloadScreenOptions(paper, accent, false);
+    assert.equal(normal.backgroundColor, paper);
+    assert.equal(normal.spinner.color, accent);
+    assert.equal(normal.fade, true);
+    assert.equal(normal.spinner.enabled, true);
+    assert.equal(normal.image, undefined);
+    const reduced = otaReloadScreenOptions(paper, accent, true);
+    assert.equal(reduced.fade, false);
+    assert.equal(reduced.spinner.enabled, false);
+  }
+});
+
+test('restart transition is followed by a fresh safety check and final saves', async () => {
+  const calls = [];
+  let allowed = true;
+  const operations = {
+    canRestart: () => allowed,
+    waitForMutations: async () => { calls.push('wait'); },
+    prepareReload: async () => { calls.push('transition'); },
+    saveCurrentState: async () => { calls.push('state'); },
+    saveDraft: async () => { calls.push('draft'); },
+    reload: async () => { calls.push('reload'); },
+  };
+  assert.equal(await restartOtaSafely(operations), true);
+  assert.deepEqual(calls, ['wait', 'transition', 'wait', 'state', 'draft', 'reload']);
+  calls.length = 0;
+  assert.equal(await restartOtaSafely({ ...operations, prepareReload: async () => { allowed = false; calls.push('leave'); } }), false);
+  assert.deepEqual(calls, ['wait', 'leave', 'wait']);
+  allowed = true;
+  calls.length = 0;
+  await assert.rejects(restartOtaSafely({ ...operations, reload: async () => { throw new Error('reload failed'); } }), /reload failed/);
+  assert.deepEqual(calls, ['wait', 'transition', 'wait', 'state', 'draft']);
 });
 test('restart waits for verified saves and refuses reload after lock, leaving settings, or save failure', async () => {
   const calls = [];

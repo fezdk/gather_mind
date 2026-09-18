@@ -2,7 +2,7 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Updates from 'expo-updates';
 import appConfig from './app.json';
-import { downloadOtaUpdate, findOtaUpdate, restartOtaSafely, type OtaCandidate } from './src/ota';
+import { downloadOtaUpdate, findOtaUpdate, otaReloadScreenOptions, restartOtaSafely, type OtaCandidate } from './src/ota';
 import * as Notifications from 'expo-notifications';
 import * as SystemUI from 'expo-system-ui';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -156,7 +156,7 @@ export default function App() {
 }
 
 function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeModeChange: (mode: ThemeMode) => void }) {
-  const { C, s, isDark } = useAppTheme();
+  const { C, s, isDark, reduceMotion } = useAppTheme();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'android' ? Math.max(insets.top, NativeStatusBar.currentHeight ?? 0) : insets.top;
   const [state, setState] = useState<AppState | null>(null);
@@ -200,6 +200,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const [otaBusy, setOtaBusy] = useState(false);
   const otaBusyRef = useRef(false);
   const [otaReady, setOtaReady] = useState(false);
+  const [otaRestarting, setOtaRestarting] = useState(false);
   const updateModalRef = useRef(false);
   updateModalRef.current = updateModal;
   const [appLockEnabled, setAppLockEnabledState] = useState(false);
@@ -337,8 +338,9 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     if (otaBusyRef.current || lockStatusRef.current !== 'unlocked' || NativeAppState.currentState !== 'active') return;
     otaBusyRef.current = true;
     setOtaBusy(true);
+    let restarting = false;
     try {
-      await restartOtaSafely({
+      restarting = await restartOtaSafely({
         waitForMutations: waitForContentMutations,
         canRestart: () => mountedRef.current && lockStatusRef.current === 'unlocked'
           && NativeAppState.currentState === 'active' && updateModalRef.current && !deletingAllRef.current,
@@ -347,13 +349,23 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
           await saveState(stateRef.current);
         },
         saveDraft: () => saveEditorDraft(editorDraftRef.current),
-        reload: () => Updates.reloadAsync(),
+        prepareReload: async () => {
+          setOtaRestarting(true);
+          setOtaStatus('Update ready. Restarting…');
+          // Give the rendered status time to register before replacing JS.
+          await new Promise<void>((resolve) => setTimeout(resolve, 900));
+        },
+        reload: () => Updates.reloadAsync({ reloadScreenOptions: otaReloadScreenOptions(C.paper, C.accentText, reduceMotion) }),
       });
+      if (!restarting && mountedRef.current) setOtaStatus('Update ready. Restart when you are ready.');
     } catch {
       setOtaStatus('Could not restart safely. Your update is downloaded; reopen the app when you are ready.');
     } finally {
-      otaBusyRef.current = false;
-      if (mountedRef.current) setOtaBusy(false);
+      // reloadAsync resolves before JS is replaced; do not flash the old controls.
+      if (!restarting) {
+        otaBusyRef.current = false;
+        if (mountedRef.current) { setOtaBusy(false); setOtaRestarting(false); }
+      }
     }
   }
 
@@ -1681,7 +1693,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
     <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} updateAvailable={!!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION)} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onUpdates={() => { setReminderModal(false); setUpdateModal(true); }} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
-    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} onPrivacy={() => { setUpdateModal(false); setPrivacyModal(true); }} otaCandidate={otaCandidate} otaStatus={otaStatus} otaBusy={otaBusy} otaReady={otaReady} onFindOta={requestOtaCheck} onInstallOta={() => void installOta()} onRestartOta={() => void restartForOta()} />
+    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} onPrivacy={() => { setUpdateModal(false); setPrivacyModal(true); }} otaCandidate={otaCandidate} otaStatus={otaStatus} otaBusy={otaBusy} otaReady={otaReady} otaRestarting={otaRestarting} onFindOta={requestOtaCheck} onInstallOta={() => void installOta()} onRestartOta={() => void restartForOta()} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -2799,6 +2811,7 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
 }
 
 type UpdateSettingsModalProps = {
+  otaRestarting: boolean;
   otaCandidate: OtaCandidate | null;
   otaStatus: string | null;
   otaBusy: boolean;
@@ -2819,8 +2832,15 @@ type UpdateSettingsModalProps = {
   onOpenRelease: (release: LatestRelease) => void;
 };
 
-function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onPrivacy, onCheckInBrowser, onOpenRelease, otaCandidate, otaStatus, otaBusy, otaReady, onFindOta, onInstallOta, onRestartOta }: UpdateSettingsModalProps) {
-  const { C, s } = useAppTheme();
+function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onPrivacy, onCheckInBrowser, onOpenRelease, otaCandidate, otaStatus, otaBusy, otaReady, otaRestarting, onFindOta, onInstallOta, onRestartOta }: UpdateSettingsModalProps) {
+  const { C, s, reduceMotion } = useAppTheme();
+  if (otaRestarting) return <Sheet visible={visible} onClose={onClose} eyebrow="App updates" title="Update ready. Restarting…">
+    <View style={s.privacySummary} accessibilityLiveRegion="polite">
+      <Text style={s.cardTitle}>Opening the updated app…</Text>
+      <Text style={s.small}>Your saved content stays on this phone.</Text>
+    </View>
+    {!reduceMotion && <ActivityIndicator style={s.spacedText} color={C.accentText} accessibilityLabel="Opening the updated app" />}
+  </Sheet>;
   const updateAvailable = !!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION);
   const status = error
     ?? (updateAvailable

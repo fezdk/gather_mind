@@ -1,6 +1,6 @@
 # Gather Mind support
 
-Gather Mind 0.6.4 is an Android-first beta. It works offline and does not require an account or content backend.
+Gather Mind 0.6.5 is an Android-first beta. It works offline and does not require an account or content backend.
 
 The app follows the phone's light or dark appearance by default. Choose a fixed mode under **Settings & privacy → Appearance** if preferred; the choice is stored locally on the phone.
 

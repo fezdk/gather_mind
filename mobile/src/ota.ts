@@ -1,4 +1,10 @@
 import { isReleaseNewer } from './updates';
+import type { ReloadScreenOptions } from 'expo-updates';
+
+// Native UI survives replacement of the JavaScript runtime. No remote image.
+export function otaReloadScreenOptions(backgroundColor: string, accentColor: string, reduceMotion: boolean): ReloadScreenOptions {
+  return { backgroundColor, fade: !reduceMotion, spinner: { enabled: !reduceMotion, color: accentColor, size: 'medium' } };
+}
 
 export type OtaCandidate = { id: string; version: string };
 export function compatibleOtaCandidate(manifest: unknown, runtime: string | null, installed: string): OtaCandidate | null {
@@ -39,10 +45,17 @@ export async function restartOtaSafely(operations: {
   canRestart: () => boolean;
   saveCurrentState: () => Promise<void>;
   saveDraft: () => Promise<void>;
+  prepareReload?: () => Promise<void>;
   reload: () => Promise<void>;
 }): Promise<boolean> {
   await operations.waitForMutations();
   if (!operations.canRestart()) return false;
+  if (operations.prepareReload) {
+    await operations.prepareReload();
+    // The user may leave/lock the app or finish another edit during the transition.
+    await operations.waitForMutations();
+    if (!operations.canRestart()) return false;
+  }
   await operations.saveCurrentState();
   await operations.saveDraft();
   if (!operations.canRestart()) return false;

@@ -1,6 +1,6 @@
 {
   "name": "gather-mind-mobile",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "main": "index.ts",
   "license": "Apache-2.0",
   "engines": {
