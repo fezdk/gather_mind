@@ -81,12 +81,24 @@ export type EditorDraft =
   | { kind: 'appointment'; itemId: string | null; title: string; startsAt: string; location: string; reminderMinutes: number }
   | { kind: 'agenda'; appointmentId: string; itemId: string | null; text: string };
 
+export type GoalDaySnapshot = {
+  date: string;
+  goals: {
+    id: string;
+    title: string;
+    recurrence: TaskRecurrence;
+    completed: boolean;
+    steps: { id: string; text: string; completed: boolean }[];
+  }[];
+};
+
 export type AppState = {
-  version: 7;
+  version: 8;
   thoughts: Thought[];
   appointments: Appointment[];
   tasks: DailyTask[];
   health: HealthState;
+  goalHistory: GoalDaySnapshot[];
 };
 
 export const REMINDER_OPTIONS = [
@@ -102,7 +114,7 @@ export function createEmptyHealthState(): HealthState {
 }
 
 export function createEmptyState(): AppState {
-  return { version: 7, thoughts: [], appointments: [], tasks: [], health: createEmptyHealthState() };
+  return { version: 8, thoughts: [], appointments: [], tasks: [], health: createEmptyHealthState(), goalHistory: [] };
 }
 
 export function createGoalFromThought(thought: Thought, today = localDateKey(), now = new Date()): DailyTask {

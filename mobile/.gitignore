@@ -30,6 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Only the public OTA trust certificate may be committed, never private keys.
+!certs/fork-ota/certificate.pem
+!certs/ota/certificate.pem
+
 # local env files
 .env*.local
 

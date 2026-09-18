@@ -39,3 +39,12 @@ secrets*.json
 google-services.json
 GoogleService-Info.plist
 service-account*.json
+
+# Private OTA signing material, including extensionless keys and backups.
+# Keep the real private key outside the checkout as documented in README.md.
+private-key
+private-key.*
+ota-keys/
+*-ota-keys/
+/keys/
+/mobile/keys/

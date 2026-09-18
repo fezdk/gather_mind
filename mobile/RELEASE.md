@@ -1,8 +1,17 @@
-# Android release runbook — Gather Mind 0.6.2
+# Android release runbook — Gather Mind 0.6.3
 
 The app identifier is `dk.fez.gathermind`. Treat it as permanent after the first Google Play upload; changing it later creates a different app.
 
 ## One-time setup
+
+For signed sideload OTA updates, follow the [complete release procedure](../README.md#signed-ota-updates-and-release-rollout).
+The first build must embed the OTA engine and reviewed public certificate. Keep
+runtime compatibility explicit, test signature/asset tampering rejection on a
+disposable physical installation, and never publish a manifest before all public
+GitHub assets verify. Test restart, app lock, backgrounding, drafts, offline use,
+and loss of network mid-download. Native changes/key rotation require a new APK.
+Do not assume this sideload OTA mechanism is appropriate for Google Play; review
+the applicable store policy and disable it in a store build if required.
 
 1. Install Node.js 24 LTS and run `npm install` in `mobile/`.
 2. Create or sign in to an Expo account: `npx eas-cli@latest login`.
@@ -21,6 +30,8 @@ npx expo export --platform android --output-dir /tmp/gather-mind-release-check
 ```
 
 Test the signed app on at least one supported Android phone. Cover empty first run, notification denial and approval, create/edit/delete for every item type, real appointment-reminder delivery while the app is closed, restart persistence, future one-off planning without a false move count, future first dates plus daily/weekly/monthly recurrence and move limits, move-to-tomorrow confirmation, and **Delete all local data**.
+
+Goal-history QA: update a schema-7 installation and verify all existing content remains, with no invented historical days. Complete/reopen goals and steps with Undo, then cross local midnight both while foregrounded and while closed/locked. Check the previous day's count, saved ordering/titles, and actual step checks. Edit/remove a recurring goal afterwards and verify yesterday stays unchanged. Test weekly/monthly completion, deferral/restore, recorded-empty versus missing days, and a gap without app usage. Exercise Week/Month selection preservation, month/year boundaries, date-picker app-switch recovery, Android Back, bottom tabs, TalkBack, 200% fonts/narrow widths, light/dark, restart, and full deletion. Directly completed parent goals must not fabricate checked steps. Old APKs do not understand schema 8; do not downgrade a real installation after migration.
 
 For appointment create/edit, open the date picker, switch apps, return, and reopen the date picker in both the same and another appointment. Repeat for time, with app lock off, within its grace period, and after locking. Confirm unconfirmed picker values do not alter the date or overwrite unsaved title/place text. Also repeat the interruption with a goal date, Health date, and quiet-status time picker.
 
@@ -68,7 +79,7 @@ Create the production Android App Bundle (`.aab`):
 npm run build:production:android
 ```
 
-The production profile auto-increments the remote Android version code while the user-visible version remains `0.6.2`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
+The production profile auto-increments the remote Android version code while the user-visible version remains `0.6.3`. Upload the first AAB manually to Play Console so Google Play App Signing and the application record are established. Later internal-track drafts can be submitted with:
 
 ```bash
 npm run submit:android
@@ -78,4 +89,4 @@ Promote from internal testing only after the console declarations, privacy/suppo
 
 ## iOS preparation
 
-The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.6.2.
+The future iOS bundle identifier is also `dk.fez.gathermind`, tablet support is disabled for now, and the configuration declares that the app does not use non-exempt encryption. No iOS build or App Store submission is part of 0.6.3.

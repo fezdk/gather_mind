@@ -2,8 +2,14 @@
 
 All notable Gather Mind changes are documented here.
 
-## Unreleased
+## 0.6.3 — 2026-09-18 (OTA baseline)
 
+- Added a dry-run-first release script that verifies APK identity/signing, requires the pushed source tag, verifies GitHub asset digests, and optionally activates a signed OTA after public asset verification. Existing release files are never overwritten.
+- Added consent-gated, locally signed in-app Android updates, pinned certificate verification and asset hashes, browser fallback, save-before-restart handling, and a native request privacy/host filter. Added a fresh-export signing tool, public asset verifier, atomic server deployment helper, and repeatable README rollout instructions. A new bootstrap APK and physical-device QA are required; no OTA release has been published.
+- Added a self-hosted Apache/PHP update-manifest endpoint with separate HTTP/TLS templates, runtime isolation, local-signature verification, GitHub release-asset restrictions, and fail-closed tests. Public and direct-origin access checks passed; the live host still needs a supported PHP version before production OTA rollout. No private signing key is deployed.
+- Documented OTA signing for forks: independent keys, public-certificate pinning, local signing/verification, optional EAS publication, key rotation, and release safety checks.
+- Added read-only goal history from Today with week/month switching, per-day completion indicators, date navigation, and saved goal titles and step states. The selected day stays selected when switching views; larger text and narrow phones use readable date rows.
+- Added encrypted daily goal snapshots in storage schema 8. The current day's snapshot follows saved changes and Undo, while closed days survive later routine edits/deletion. Earlier and unobserved days remain explicitly missing rather than being reconstructed from incomplete completion metadata. Full data deletion clears the snapshots too.
 - Fixed Android date/time pickers becoming unavailable after switching apps with an appointment calendar open. Interrupted dialogs now close without changing the form, stale native dialogs are cleared before reopening, and late callbacks cannot affect another editor. The shared fix also covers goal dates, Health dates, and the daily-status time picker.
 
 ## 0.6.2 — 2026-09-08

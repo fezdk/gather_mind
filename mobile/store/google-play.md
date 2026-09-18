@@ -1,4 +1,4 @@
-# Google Play listing and declarations — Gather Mind 0.6.2
+# Google Play listing and declarations — Gather Mind 0.6.3
 
 ## Product identity
 
@@ -16,7 +16,9 @@ Build a gentle daily list, optionally break larger goals into smaller checkable 
 
 Add appointments, choose local reminders, and keep questions, decisions, documents, errands, things to bring, and follow-ups together in a readable appointment plan.
 
-Gather Mind works offline. There is no account, advertising, analytics, or cloud backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics. A resizable Android home-screen widget can show today’s count and, only after an explicit privacy choice, goal and appointment context. Automatic update checks are off by default; if enabled, the app reads only the latest public version from GitHub.
+Gather Mind works offline. There is no account, advertising, analytics, or cloud content backend. Your content stays encrypted on your phone, and you can optionally lock the app with your phone's biometrics. A resizable Android home-screen widget can show today’s count and, only after an explicit privacy choice, goal and appointment context. Automatic update checks are off by default; if enabled, the app reads only the latest public version from GitHub.
+
+Release-preparation note: the sideload source now also includes explicitly approved signed OTA downloads via gathermind.control.dk/Cloudflare, GitHub and its release CDN. Review store executable-code policies before distributing that mechanism through Play; disable it in the store variant if required. Update the final Data safety disclosures to match the actual submitted build and all connection metadata recipients.
 
 Choose a light or dark appearance, or let Gather Mind follow your phone automatically.
 

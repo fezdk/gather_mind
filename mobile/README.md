@@ -1,4 +1,4 @@
-# Gather Mind mobile 0.6.2
+# Gather Mind mobile 0.6.3
 
 This is the native Android/iOS version of Gather Mind. It encrypts its local SQLCipher database and schedules appointment reminders plus the optional quiet daily goal status entirely on the phone. The random database key is kept in the operating system's secure key store. No runtime backend, account, push token, or internet connection is required for its organisational features. A separate automatic GitHub release check is off by default.
 
@@ -31,6 +31,16 @@ The Today screen also includes a daily goal list:
 
 The **Thoughts** screen is a searchable list first. Its optional connection view explains matches through shared themes, meaningful words, or appointment links. Thought capture can suggest up to three appointments from the previous 7 days or next 30 days; suggestions are calculated on-device and nothing is linked until it is selected. A saved thought can become a one-off goal for today while the original remains available; opening that goal provides a link back to its source thought.
 
+## Read-only goal history
+
+**Today → History** opens **Previous days**, initially showing the previous day in a Monday-first week. Switch to **Month** without losing the selected date, browse with the arrows, or tap the period heading to choose a date. Each recorded day shows completed/total goals; selecting it shows saved titles, recurrence labels, and the actual completion status of its steps. These are status indicators, not editable checkboxes. Bottom tabs and Android Back remain available.
+
+Storage schema 8 adds `goalHistory` inside the existing encrypted state. On hydration, saved changes (including Undo), foreground return, and foreground date rollover, the app captures the current Today list in its saved order. Only the latest date can be updated; earlier snapshots are independent copies and are not affected by later routine edits or deletion. Completing a parent does not fabricate completed steps. A goal moved or removed before the day closes is absent from that day's final list and denominator.
+
+History begins on the first use of this feature, **not retroactively**. Days on which the app was not used have no record; they are not scored as zero progress or filled from current recurring templates. `No goals planned` means an actual saved empty list, while `No saved history` means no observation. Records show the last saved state of the local day, not an inferred event log. Clock rollback does not rewrite closed records. Removing a goal keeps its previous-day records; **Delete all local data** clears all goal history.
+
+At large font sizes or narrow widths, calendar cells become full-width date rows with a jump to the selected day's details. History follows the chosen light/dark appearance and requires no network permission or new dependency.
+
 Today deliberately does not repeat a partial thought list. Its capture action remains immediately available, while all saved thoughts live in the searchable Thoughts screen or inside a linked appointment.
 
 ## Optional Health tab
@@ -60,6 +70,7 @@ Today deliberately does not repeat a partial thought list. Its capture action re
 
 ## App updates
 
+- Source includes locally signed OTA installation with a pinned certificate, explicit consent, privacy-filtered native requests and browser fallback. A new native APK is required to bootstrap it; physical-device QA is still pending. Follow the [release/signing recipe](../README.md#signed-ota-updates-and-release-rollout) for local packaging and atomic server activation. This is separate from APK signing.
 - **Settings & privacy → App updates** explains the network behavior before anything is enabled.
 - Automatic checks are off by default. If enabled, Gather Mind asks only GitHub's public release API for the latest version, at most once every 24 hours when the app opens or returns to the foreground. It does not run a background service or send user content, health data, usage history, or a Gather Mind identifier.
 - Android treats Internet access as an install-time normal permission, so there is no runtime Android permission dialog or system permission switch. The in-app setting controls whether Gather Mind itself performs the request.

@@ -1,0 +1,23 @@
+# Requires a real certificate and ssl/rewrite/PHP modules BEFORE enabling.
+<VirtualHost *:443>
+    ServerName @@HOST@@
+    DocumentRoot "@@ROOT@@/html"
+    ServerSignature Off
+    SSLEngine On
+    SSLProtocol -all +TLSv1.2 +TLSv1.3
+    SSLCertificateFile "/etc/letsencrypt/live/@@HOST@@/fullchain.pem"
+    SSLCertificateKeyFile "/etc/letsencrypt/live/@@HOST@@/privkey.pem"
+    ErrorLog "@@ROOT@@/logs/error_log"
+    CustomLog /dev/null common
+    <Directory "@@ROOT@@/html">
+        Options SymLinksIfOwnerMatch
+        AllowOverride None
+        Require all granted
+        DirectoryIndex disabled
+        RewriteEngine On
+        RewriteRule ^manifest$ index.php [END]
+        <FilesMatch "^(?!(?:index\.php|manifest)$)">
+            Require all denied
+        </FilesMatch>
+    </Directory>
+</VirtualHost>

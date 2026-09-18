@@ -12,7 +12,7 @@ After reading this file, read `AGENTS.local.md` completely if it exists in the r
 - SQLCipher is enabled through the `expo-sqlite` config plugin and is not supported in Expo Go. Use a native development, preview, or release build for runtime testing.
 - Existing `expo-sqlite/kv-store` content is migrated copy-first. Preserve the migration and never remove or overwrite the legacy value until the encrypted write has been read back successfully.
 - The optional app lock uses local device authentication and is deliberately separate from the database key, so biometric enrollment changes do not destroy the only key copy.
-- Android Internet access exists only for the explicitly enabled GitHub release check. Keep automatic checks off by default, contact no host except `api.github.com`, send no app content or usage data, and preserve the browser-only manual option. Any other network use requires an explicit privacy-model decision. `mobile/app.json` also disables Android cloud backup.
+- Android Internet access is limited to the default-off GitHub release check (`api.github.com`) and separately approved signed OTA checks/downloads (`gathermind.control.dk`, `github.com`, `release-assets.githubusercontent.com`). No app content, installation IDs, error text or usage history may leave the device. Keep the browser-only option, `updates.checkAutomatically: NEVER`, pinned signing certificate, and the fail-closed native privacy patch. No automatic code downloads. Other hosts/use require an explicit privacy-model decision. Android cloud backup stays disabled.
 - Appointment reminders are local OS notifications. Test real scheduled appointment reminders on a physical Android device.
 - The permanent Android package and future iOS bundle identifier are both `dk.fez.gathermind`.
 - Android phone/portrait is the current target. Tablet support is deliberately off; iOS is prepared but not currently shipped.
@@ -73,7 +73,7 @@ Do not infer the next version from this document; inspect Git tags and current f
 - `mobile/app.json` Expo `version`;
 - `mobile/app.json` Android `versionCode` (strictly increasing);
 - `mobile/app.json` iOS `buildNumber` (integer string, increasing);
-- the hard-coded visible version in the Settings/privacy copy in `mobile/App.tsx`;
+- the visible Settings/privacy version in `mobile/App.tsx` (derived from `mobile/app.json`);
 - `README.md`, `CHANGELOG.md`, `mobile/RELEASE.md`, and store/support/privacy copy where applicable.
 
 Use semantic versioning and inspect the existing release history before selecting a version. Do not change `dk.fez.gathermind` after store registration.
@@ -173,10 +173,10 @@ https://github.com/fezdk/gather_mind
 
 Keep authenticated account details and machine-specific Git credential commands in `AGENTS.local.md`.
 
-After tests, source commit, and tag, publish a headless-downloadable release asset with a command shaped like:
+After tests, the verified APK build, source commit, tag, and push, use the guarded release script documented in README. First omit `--publish` for local validation:
 
 ```bash
-gh release create vX.Y.Z releases/Gather-Mind-X.Y.Z.apk --title "Gather Mind X.Y.Z" --notes-file /tmp/gather-mind-release-notes.md
+node scripts/deploy-release.mjs --apk releases/Gather-Mind-X.Y.Z.apk --notes docs/releases/vX.Y.Z.md --publish
 ```
 
 Then verify the release and asset digest with `gh release view`. Public release assets must be downloadable without a GitHub account.

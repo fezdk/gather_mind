@@ -1,0 +1,18 @@
+# Rendered from Gather Mind's template. Do not enable until reviewed by root.
+# HTTP remains available only for ACME validation; the app must use HTTPS.
+<VirtualHost *:80>
+    ServerName @@HOST@@
+    DocumentRoot "@@ROOT@@/html"
+    ServerSignature Off
+    ErrorLog "@@ROOT@@/logs/error_log"
+    # Intentionally no per-request access log / IP or device-header collection.
+    CustomLog /dev/null common
+    <Directory "@@ROOT@@/html">
+        Options None
+        AllowOverride None
+        Require all granted
+    </Directory>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/[A-Za-z0-9_-]+$
+    RewriteRule ^ https://@@HOST@@%{REQUEST_URI} [R=308,L,NE]
+</VirtualHost>

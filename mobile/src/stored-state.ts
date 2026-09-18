@@ -2,9 +2,11 @@ import {
   createEmptyHealthState, isLocalDateKey, isTaskRecurrence,
   type AppState, type DailyTask, type EditorDraft, type HealthRating, type HealthState, type TaskStep,
 } from './model';
+import { parseGoalHistory } from './goal-history';
 
+type LegacyStateV7 = Omit<AppState, 'version' | 'goalHistory'> & { version: 7 };
 type LegacyTaskV6 = Omit<DailyTask, 'sortOrder'>;
-type LegacyStateV6 = Omit<AppState, 'version' | 'tasks'> & { version: 6; tasks: LegacyTaskV6[] };
+type LegacyStateV6 = Omit<LegacyStateV7, 'version' | 'tasks'> & { version: 6; tasks: LegacyTaskV6[] };
 type LegacyTaskV3 = Omit<LegacyTaskV6, 'steps' | 'stepProgress'>;
 type LegacyHealthStateV5 = {
   enabled: boolean;
@@ -13,10 +15,10 @@ type LegacyHealthStateV5 = {
 };
 type LegacyStateV5 = Omit<LegacyStateV6, 'version' | 'health'> & { version: 5; health: LegacyHealthStateV5 };
 type LegacyStateV4 = Omit<LegacyStateV6, 'version' | 'health'> & { version: 4 };
-type LegacyStateV3 = Omit<AppState, 'version' | 'tasks' | 'health'> & { version: 3; tasks: LegacyTaskV3[] };
+type LegacyStateV3 = Omit<LegacyStateV7, 'version' | 'tasks' | 'health'> & { version: 3; tasks: LegacyTaskV3[] };
 type LegacyTask = Omit<LegacyTaskV6, 'recurrence' | 'recurrenceAnchor' | 'completedOccurrence' | 'steps' | 'stepProgress'> & { isDaily: boolean };
-type LegacyStateV2 = Omit<AppState, 'version' | 'tasks' | 'health'> & { version: 2; tasks: LegacyTask[] };
-type LegacyStateV1 = Omit<AppState, 'version' | 'tasks' | 'health'> & { version: 1 };
+type LegacyStateV2 = Omit<LegacyStateV7, 'version' | 'tasks' | 'health'> & { version: 2; tasks: LegacyTask[] };
+type LegacyStateV1 = Omit<LegacyStateV7, 'version' | 'tasks' | 'health'> & { version: 1 };
 
 function addTaskSortOrder<T extends LegacyTaskV6>(tasks: T[]): Array<T & Pick<DailyTask, 'sortOrder'>> {
   return tasks.map((task, index) => ({ ...task, sortOrder: index * 1024 }));
@@ -87,35 +89,42 @@ function parseLegacyHealthState(value: unknown): HealthState | null {
 }
 
 export function parseStoredState(raw: string, source: string): AppState {
-  let parsed: AppState | LegacyStateV6 | LegacyStateV5 | LegacyStateV4 | LegacyStateV3 | LegacyStateV2 | LegacyStateV1;
+  let parsed: AppState | LegacyStateV7 | LegacyStateV6 | LegacyStateV5 | LegacyStateV4 | LegacyStateV3 | LegacyStateV2 | LegacyStateV1;
   try {
-    parsed = JSON.parse(raw) as AppState | LegacyStateV6 | LegacyStateV5 | LegacyStateV4 | LegacyStateV3 | LegacyStateV2 | LegacyStateV1;
+    parsed = JSON.parse(raw);
   } catch {
     throw new Error(`${source} contains data Gather Mind cannot read. It was left untouched.`);
+  }
+  if (parsed.version === 8 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)
+    && parsed.tasks.every((task) => Number.isFinite(task.sortOrder))) {
+    const health = parseHealthState(parsed.health);
+    const goalHistory = parseGoalHistory(parsed.goalHistory);
+    if (health && goalHistory) return { ...parsed, health, goalHistory };
   }
   if (parsed.version === 7 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)
     && parsed.tasks.every((task) => Number.isFinite(task.sortOrder))) {
     const health = parseHealthState(parsed.health);
-    if (health) return { ...parsed, health };
+    if (health) return { ...parsed, version: 8, goalHistory: [], health };
   }
   if (parsed.version === 6 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)) {
     const health = parseHealthState(parsed.health);
-    if (health) return { ...parsed, version: 7, tasks: addTaskSortOrder(parsed.tasks), health };
+    if (health) return { ...parsed, version: 8, goalHistory: [], tasks: addTaskSortOrder(parsed.tasks), health };
   }
   if (parsed.version === 5 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)) {
     const health = parseLegacyHealthState(parsed.health);
-    if (health) return { ...parsed, version: 7, tasks: addTaskSortOrder(parsed.tasks), health };
+    if (health) return { ...parsed, version: 8, goalHistory: [], tasks: addTaskSortOrder(parsed.tasks), health };
   }
   if (parsed.version === 4 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)) {
-    return { ...parsed, version: 7, tasks: addTaskSortOrder(parsed.tasks), health: createEmptyHealthState() };
+    return { ...parsed, version: 8, goalHistory: [], tasks: addTaskSortOrder(parsed.tasks), health: createEmptyHealthState() };
   }
   if (parsed.version === 3 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)) {
-    return { ...parsed, version: 7, tasks: addTaskSortOrder(parsed.tasks.map((task) => ({ ...task, steps: [] }))), health: createEmptyHealthState() };
+    return { ...parsed, version: 8, goalHistory: [], tasks: addTaskSortOrder(parsed.tasks.map((task) => ({ ...task, steps: [] }))), health: createEmptyHealthState() };
   }
   if (parsed.version === 2 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments) && Array.isArray(parsed.tasks)) {
     return {
       ...parsed,
-      version: 7,
+      version: 8,
+      goalHistory: [],
       tasks: parsed.tasks.map(({ isDaily, ...task }, index) => ({
         ...task,
         sortOrder: index * 1024,
@@ -127,7 +136,7 @@ export function parseStoredState(raw: string, source: string): AppState {
     };
   }
   if (parsed.version === 1 && Array.isArray(parsed.thoughts) && Array.isArray(parsed.appointments)) {
-    return { ...parsed, version: 7, tasks: [], health: createEmptyHealthState() };
+    return { ...parsed, version: 8, goalHistory: [], tasks: [], health: createEmptyHealthState() };
   }
   throw new Error(`${source} has an unsupported format. It was left untouched.`);
 }

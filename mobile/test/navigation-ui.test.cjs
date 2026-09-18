@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const appSource = fs.readFileSync(path.join(__dirname, '../App.tsx'), 'utf8');
 
 test('bottom navigation remains available on appointment detail and leaves detail when used', () => {
-  assert.match(appSource, /function navigateToTab\(nextTab: Tab\) \{\s*setSelectedId\(null\);\s*setTab\(nextTab\);\s*\}/);
+  assert.match(appSource, /function navigateToTab\(nextTab: Tab\) \{\s*setSelectedId\(null\);\s*setGoalHistoryOpen\(false\);\s*setTab\(nextTab\);\s*\}/);
   assert.match(appSource, /\{selected \? <AppointmentDetail[\s\S]*<\/>\}\s*<View style=\{\[s\.nav/);
   assert.match(appSource, /paddingBottom: 112 \+ bottom/);
   assert.match(appSource, /backLabel=\{tab === 'today' \? 'Today' : 'Appointments'\}/);

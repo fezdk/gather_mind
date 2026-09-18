@@ -1,6 +1,8 @@
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import * as Application from 'expo-application';
+import * as Updates from 'expo-updates';
+import appConfig from './app.json';
+import { downloadOtaUpdate, findOtaUpdate, restartOtaSafely, type OtaCandidate } from './src/ota';
 import * as Notifications from 'expo-notifications';
 import * as SystemUI from 'expo-system-ui';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -44,6 +46,8 @@ import {
 import { DEFAULT_DAILY_STATUS_MINUTES, dateAtLocalMinutes } from './src/daily-status';
 import { editorDraftHasChanges } from './src/editor-changes';
 import { DARK_COLORS, LIGHT_COLORS, type ThemeColors } from './src/theme';
+import { captureGoalDay } from './src/goal-history';
+import { GoalHistoryView } from './src/GoalHistoryView';
 import { clearWidgetSnapshot, updateWidgetSnapshot } from './src/widget';
 import { parseWidgetRoute, type WidgetRoute } from './src/widget-model';
 import {
@@ -76,7 +80,8 @@ const taskDate = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: '
 const fullDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const shortTime = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 const updateCheckTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-const APP_VERSION = Application.nativeApplicationVersion ?? '0.6.2';
+// The JS version changes after an OTA; the Android package version does not.
+const APP_VERSION = appConfig.expo.version;
 function formatDailyStatusTime(minutes: number) {
   return shortTime.format(dateAtLocalMinutes(localDateKey(), minutes));
 }
@@ -157,6 +162,8 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const [state, setState] = useState<AppState | null>(null);
   const stateRef = useRef<AppState | null>(null);
   const [tab, setTab] = useState<Tab>('today');
+  const [goalHistoryOpen, setGoalHistoryOpen] = useState(false);
+  const [historyToday, setHistoryToday] = useState(localDateKey());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [appointmentListMode, setAppointmentListMode] = useState<AppointmentListMode>('upcoming');
   const [thoughtModal, setThoughtModal] = useState(false);
@@ -188,6 +195,13 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const [latestRelease, setLatestRelease] = useState<LatestRelease | null>(null);
   const [updateCheckError, setUpdateCheckError] = useState<string | null>(null);
   const lastNotifiedVersionRef = useRef<string | null>(null);
+  const [otaCandidate, setOtaCandidate] = useState<OtaCandidate | null>(null);
+  const [otaStatus, setOtaStatus] = useState<string | null>(null);
+  const [otaBusy, setOtaBusy] = useState(false);
+  const otaBusyRef = useRef(false);
+  const [otaReady, setOtaReady] = useState(false);
+  const updateModalRef = useRef(false);
+  updateModalRef.current = updateModal;
   const [appLockEnabled, setAppLockEnabledState] = useState(false);
   const appLockEnabledRef = useRef(false);
   const [appLockDelayMs, setAppLockDelayMsState] = useState<AppLockDelayMs>(0);
@@ -293,6 +307,83 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     if (enabled) void runAutomaticUpdateCheck(true);
   }
 
+  async function checkOta(): Promise<void> {
+    if (Platform.OS !== 'android') { setOtaStatus('In-app updates are currently Android-only. Please use the browser option.'); return; }
+    if (otaBusyRef.current || lockStatusRef.current !== 'unlocked') return;
+    otaBusyRef.current = true;
+    setOtaBusy(true);
+    setOtaStatus('Checking for a signed, compatible update…');
+    try {
+      const candidate = await findOtaUpdate(Updates, APP_VERSION);
+      if (!mountedRef.current) return;
+      setOtaCandidate(candidate);
+      setOtaStatus(candidate ? `Version ${candidate.version} is ready to download.`
+        : 'No compatible in-app update is available. A newer native version may still be available on GitHub.');
+    } catch {
+      setOtaStatus('The update could not be checked. Try again, or use the browser option below.');
+    } finally {
+      otaBusyRef.current = false;
+      if (mountedRef.current) setOtaBusy(false);
+    }
+  }
+
+  function requestOtaCheck() {
+    Alert.alert('Connect to check for an update?',
+      'Gather Mind will contact gathermind.control.dk via Cloudflare. Installing an update also downloads files from GitHub and its release-asset CDN. These services see your IP address. No personal content, device identifier, or usage history is sent. This does not enable automatic downloads.',
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Find updates', onPress: () => void checkOta() }]);
+  }
+
+  async function restartForOta() {
+    if (otaBusyRef.current || lockStatusRef.current !== 'unlocked' || NativeAppState.currentState !== 'active') return;
+    otaBusyRef.current = true;
+    setOtaBusy(true);
+    try {
+      await restartOtaSafely({
+        waitForMutations: waitForContentMutations,
+        canRestart: () => mountedRef.current && lockStatusRef.current === 'unlocked'
+          && NativeAppState.currentState === 'active' && updateModalRef.current && !deletingAllRef.current,
+        saveCurrentState: async () => {
+          if (!stateRef.current) throw new Error('No current state');
+          await saveState(stateRef.current);
+        },
+        saveDraft: () => saveEditorDraft(editorDraftRef.current),
+        reload: () => Updates.reloadAsync(),
+      });
+    } catch {
+      setOtaStatus('Could not restart safely. Your update is downloaded; reopen the app when you are ready.');
+    } finally {
+      otaBusyRef.current = false;
+      if (mountedRef.current) setOtaBusy(false);
+    }
+  }
+
+  async function installOta() {
+    if (!otaCandidate || otaBusyRef.current || lockStatusRef.current !== 'unlocked') return;
+    otaBusyRef.current = true;
+    setOtaBusy(true);
+    setOtaStatus('Downloading and verifying the update…');
+    let downloaded = false;
+    try {
+      await waitForContentMutations();
+      if (!stateRef.current || lockStatusRef.current !== 'unlocked' || NativeAppState.currentState !== 'active') return;
+      await saveState(stateRef.current);
+      await saveEditorDraft(editorDraftRef.current);
+      if (lockStatusRef.current !== 'unlocked' || NativeAppState.currentState !== 'active') return;
+      const installed = await downloadOtaUpdate(Updates, APP_VERSION);
+      if (!mountedRef.current) return;
+      setOtaCandidate(installed);
+      setOtaReady(true);
+      setOtaStatus(`Version ${installed.version} is verified. Restart now to use it, or it will apply next time the app starts.`);
+      downloaded = true;
+    } catch {
+      setOtaStatus('The update could not be downloaded and verified. Nothing was restarted. Try again or open GitHub in your browser.');
+    } finally {
+      otaBusyRef.current = false;
+      if (mountedRef.current) setOtaBusy(false);
+    }
+    if (downloaded && mountedRef.current && updateModalRef.current) await restartForOta();
+  }
+
   function beginContentMutation(): (() => void) | null {
     if (deletingAllRef.current) return null;
     activeContentMutationsRef.current += 1;
@@ -373,7 +464,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       if (legacyReminderErrors.length) console.warn('Could not remove a legacy sample reminder', legacyReminderErrors);
       const cleaned = removeLegacySeedData(stored);
       const appointments = await reconcileReminders(cleaned.appointments);
-      const hydrated = appointments === cleaned.appointments ? cleaned : { ...cleaned, appointments };
+      const hydrated = captureGoalDay(appointments === cleaned.appointments ? cleaned : { ...cleaned, appointments });
       if (hydrated !== stored) await saveState(hydrated);
       const storedDraft = await loadEditorDraft();
       const editorDraft = editorDraftRef.current ?? storedDraft;
@@ -394,6 +485,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       stateRef.current = hydrated;
       editorDraftRef.current = editorDraft;
       setState(hydrated);
+      setHistoryToday(localDateKey());
       setNotificationsOn(remindersAreOn);
       setStartupError(null);
       if (editorDraft?.kind === 'thought') {
@@ -489,6 +581,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     updateLockStatus('locked');
     stateRef.current = null;
     setState(null);
+    setGoalHistoryOpen(false);
     setSelectedId(null);
     setThoughtModal(false);
     setEditingThoughtId(null);
@@ -634,6 +727,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       Alert.alert('Could not start Gather Mind', String(error));
     });
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      setGoalHistoryOpen(false);
       const data = response.notification.request.content.data;
       const appointmentId = data?.appointmentId;
       if (typeof appointmentId === 'string') {
@@ -686,6 +780,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
           setAwayCover(false);
         }
         requestAutomaticUnlock();
+        if (lockStatusRef.current === 'unlocked') refreshGoalDay();
         if (lockStatusRef.current === 'unlocked') void runAutomaticUpdateCheck();
         return;
       }
@@ -711,6 +806,21 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     clearLockDelayTimer();
   }, []);
 
+  function refreshGoalDay() {
+    const current = stateRef.current;
+    if (!current || deletingAllRef.current || lockStatusRef.current !== 'unlocked') return;
+    setHistoryToday(localDateKey());
+    const next = captureGoalDay(current);
+    if (next !== current) commit(next);
+  }
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (NativeAppState.currentState === 'active') refreshGoalDay();
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -722,14 +832,18 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       if (taskModal) { closeTaskEditor(); return true; }
       if (pendingPostponeId) { setPendingPostponeId(null); return true; }
       if (selectedId) { setSelectedId(null); return true; }
+      if (goalHistoryOpen) { setGoalHistoryOpen(false); return true; }
       if (tab !== 'today') { setTab('today'); return true; }
       return false;
     });
     return () => subscription.remove();
-  }, [appointmentModal, pendingPostponeId, privacyModal, reminderModal, selectedId, tab, taskModal, thoughtModal, updateModal]);
+  }, [appointmentModal, pendingPostponeId, privacyModal, reminderModal, selectedId, tab, taskModal, thoughtModal, updateModal, goalHistoryOpen]);
 
   function commit(next: AppState): boolean {
     if (deletingAllRef.current) return false;
+    // A stale editor/Undo closure must not roll back closed-day history.
+    next = captureGoalDay({ ...next, goalHistory: stateRef.current?.goalHistory ?? next.goalHistory });
+    setHistoryToday(localDateKey());
     const tasksChanged = stateRef.current?.tasks !== next.tasks;
     void updateWidgetSnapshot(next, widgetDetailsEnabledRef.current)
       .catch((error) => console.warn('Could not update the home screen widget after a change', error));
@@ -754,6 +868,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   }
 
   function applyWidgetRoute(route: WidgetRoute, current: AppState): boolean {
+    setGoalHistoryOpen(false);
     pendingWidgetRouteRef.current = null;
     discardEditorDraft();
     setThoughtModal(false);
@@ -1319,7 +1434,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
 
   function deleteTask(task: DailyTask) {
     if (!state) return;
-    Alert.alert('Remove this goal?', task.recurrence === 'once' ? 'This goal will be removed.' : `This ${taskRecurrenceName(task.recurrence).toLowerCase()} goal and all its future occurrences will be removed.`, [
+    Alert.alert('Remove this goal?', task.recurrence === 'once' ? 'This goal will be removed. Saved previous days remain in goal history.' : `This ${taskRecurrenceName(task.recurrence).toLowerCase()} goal and all its future occurrences will be removed. Saved previous days remain in goal history.`, [
       { text: 'Keep it', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => {
         commit({ ...state, tasks: state.tasks.filter((item) => item.id !== task.id) });
@@ -1443,6 +1558,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
       editorDraftRef.current = null;
       editorBaselineRef.current = null;
       const empty = createEmptyState();
+      setGoalHistoryOpen(false);
       if (lockStatusRef.current === 'unlocked') {
         stateRef.current = empty;
         setState(empty);
@@ -1518,13 +1634,14 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
   const appointmentEditorBaseline = editorBaselineRef.current?.kind === 'appointment' ? editorBaselineRef.current : undefined;
   function navigateToTab(nextTab: Tab) {
     setSelectedId(null);
+    setGoalHistoryOpen(false);
     setTab(nextTab);
   }
 
   return <><SafeAreaView style={[s.app, { paddingTop: topInset }]} edges={['right', 'left']}>
     <ExpoStatusBar style={isDark ? 'light' : 'dark'} backgroundColor={C.paper} translucent />
     <View style={s.topbar}>
-      <Pressable style={s.brand} onPress={() => { setSelectedId(null); setTab('today'); }} accessibilityRole="button" accessibilityLabel="Go to Today">
+      <Pressable style={s.brand} onPress={() => navigateToTab('today')} accessibilityRole="button" accessibilityLabel="Go to Today">
         <View style={s.brandMark} importantForAccessibility="no-hide-descendants"><View style={s.dotOne} /><View style={s.dotTwo} /><View style={s.dotThree} /></View>
         <Text style={s.brandText}>Gather Mind</Text>
       </Pressable>
@@ -1548,7 +1665,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
         { text: 'Delete', style: 'destructive', onPress: () => deleteAppointment(selected) },
       ])}
     /> : <>
-      {tab === 'today' && <TodayView state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onReorderTasks={reorderTodayTasks} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />}
+      {tab === 'today' && (goalHistoryOpen ? <GoalHistoryView history={state.goalHistory} today={historyToday} colors={C} bottomInset={insets.bottom} onBack={() => setGoalHistoryOpen(false)} /> : <TodayView onOpenHistory={() => { refreshGoalDay(); setGoalHistoryOpen(true); }} state={state} notificationsOn={notificationsOn} onEnable={enableReminders} onCapture={() => openThought()} onAddTask={() => openTask()} onEditTask={openTask} onToggleTask={toggleTask} onToggleTaskStep={toggleStep} onPostponeTask={requestPostponeTask} onRestoreTask={restoreTask} onReorderTasks={reorderTodayTasks} onAddAppointment={openAppointmentEditor} onOpen={setSelectedId} onOpenHealth={() => setTab('health')} />)}
       {tab === 'thoughts' && <ThoughtsView thoughts={state.thoughts} onCapture={() => openThought()} onEdit={openThought} />}
       {tab === 'appointments' && <AppointmentsView appointments={state.appointments} thoughts={state.thoughts} mode={appointmentListMode} onModeChange={setAppointmentListMode} onAdd={openAppointmentEditor} onOpen={setSelectedId} />}
       {tab === 'health' && state.health.enabled && <HealthView health={state.health} onRate={changeHealthRating} onLogCycleStart={logCycleStart} onSetPeriodEnd={savePeriodEnd} onRemovePeriod={confirmRemovePeriod} onClearHistory={confirmClearHealthHistory} />}
@@ -1564,7 +1681,7 @@ function GatherMindApp({ themeMode, onThemeModeChange }: { themeMode: ThemeMode;
     <TaskModal visible={taskModal} task={editingTask} sourceThought={editingTaskSourceThought} draft={editorDraft?.kind === 'task' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeTaskEditor} onSave={saveTask} onSaveSteps={saveTaskSteps} onDelete={deleteTask} onOpenSourceThought={(thought) => closeTaskEditorThen(() => openThought(thought))} />
     <AppointmentModal visible={appointmentModal} appointment={selected} baseline={appointmentEditorBaseline} draft={editorDraft?.kind === 'appointment' ? editorDraft : undefined} onDraftChange={updateEditorDraft} onClose={closeAppointmentEditor} onSave={upsertAppointment} />
     <SettingsModal visible={reminderModal} enabled={notificationsOn} themeMode={themeMode} healthEnabled={state.health.enabled} cycleTrackingEnabled={state.health.cycleTrackingEnabled} dailyStatusEnabled={dailyStatusEnabled} dailyStatusMinutes={dailyStatusMinutes} dailyStatusBusy={dailyStatusBusy} widgetDetailsEnabled={widgetDetailsEnabled} widgetSettingBusy={widgetSettingBusy} appLockEnabled={appLockEnabled} appLockDelayMs={appLockDelayMs} appLockBusy={lockSettingBusy} updateAvailable={!!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION)} onClose={() => setReminderModal(false)} onEnable={enableReminders} onThemeModeChange={onThemeModeChange} onHealthEnabledChange={changeHealthEnabled} onCycleTrackingEnabledChange={changeCycleTrackingEnabled} onDailyStatusChange={(enabled) => void changeDailyStatus(enabled)} onDailyStatusMinutesChange={(minutes) => void changeDailyStatusTime(minutes)} onWidgetDetailsChange={(enabled) => void changeWidgetDetails(enabled)} onAppLockChange={(enabled) => void changeAppLock(enabled)} onAppLockDelayChange={(delayMs) => void changeAppLockDelay(delayMs)} onUpdates={() => { setReminderModal(false); setUpdateModal(true); }} onPrivacy={() => { setReminderModal(false); setPrivacyModal(true); }} onDeleteAll={confirmDeleteAllData} />
-    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckNow={() => void runAutomaticUpdateCheck(true)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} />
+    <UpdateSettingsModal visible={updateModal} enabled={automaticUpdateChecksEnabled} busy={updateCheckBusy} lastCheckedAt={lastUpdateCheckAt} latestRelease={latestRelease} error={updateCheckError} onClose={() => setUpdateModal(false)} onEnabledChange={(enabled) => void changeAutomaticUpdateChecks(enabled)} onCheckNow={() => void runAutomaticUpdateCheck(true)} onCheckInBrowser={() => void openReleasePage()} onOpenRelease={(release) => void openReleasePage(release.url)} otaCandidate={otaCandidate} otaStatus={otaStatus} otaBusy={otaBusy} otaReady={otaReady} onFindOta={requestOtaCheck} onInstallOta={() => void installOta()} onRestartOta={() => void restartForOta()} />
     <PrivacyModal visible={privacyModal} onClose={() => setPrivacyModal(false)} onDeleteAll={confirmDeleteAllData} />
     <PostponeModal visible={!!pendingTask} task={pendingTask} onClose={() => setPendingPostponeId(null)} onConfirm={() => pendingTask && postponeTask(pendingTask)} />
     {!!notice && <View style={[s.toast, { bottom: 94 + insets.bottom }]}><Text style={s.toastText} accessibilityLiveRegion="polite">{notice.text}</Text>{notice.onAction && <Pressable style={s.toastAction} onPress={runNoticeAction} accessibilityRole="button" accessibilityLabel={`${notice.actionLabel}: ${notice.text}`}><Text style={s.toastActionText}>{notice.actionLabel}</Text></Pressable>}</View>}
@@ -1612,12 +1729,13 @@ type TodayViewProps = {
   onAddAppointment: () => void;
   onOpen: (id: string) => void;
   onOpenHealth: () => void;
+  onOpenHistory: () => void;
 };
 
 type TaskDragSession = { taskId: string; baseOrder: string[]; initialTop: number; initialScrollY: number; latestDy: number };
 const TASK_LIST_GAP = 8;
 
-function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onReorderTasks, onAddAppointment, onOpen, onOpenHealth }: TodayViewProps) {
+function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onEditTask, onToggleTask, onToggleTaskStep, onPostponeTask, onRestoreTask, onReorderTasks, onAddAppointment, onOpen, onOpenHealth, onOpenHistory }: TodayViewProps) {
   const { C, s, reduceMotion } = useAppTheme();
   const { bottom } = useSafeAreaInsets();
   const next = upcomingAppointments(state.appointments)[0];
@@ -1782,6 +1900,7 @@ function TodayView({ state, notificationsOn, onEnable, onCapture, onAddTask, onE
     <View style={s.taskHeading}><View style={s.flex}><Text style={s.eyebrow}>Today’s gentle list</Text><Text style={s.sectionTitle} accessibilityRole="header">{completed} of {todayTasks.length} complete</Text></View><CreationButton label="Goal +" accessibilityLabel="Add a goal" onPress={onAddTask} /></View>
     <View style={s.progressTrack} accessible={todayTasks.length > 0} importantForAccessibility={todayTasks.length ? "yes" : "no"} accessibilityRole={todayTasks.length ? "progressbar" : "none"} accessibilityLabel="Goals completed today" accessibilityValue={todayTasks.length ? { min: 0, max: todayTasks.length, now: completed, text: `${completed} of ${todayTasks.length}` } : undefined}><View style={[s.progressFill, { width: todayTasks.length ? `${Math.round(completed / todayTasks.length * 100)}%` : '0%' }]} /></View>
     <Text style={s.swipeHint}>Tap to edit · hold the handle to reorder · swipe right to complete · left for tomorrow</Text>
+    <Pressable style={s.historyLink} onPress={onOpenHistory} accessibilityRole="button" accessibilityLabel="View goal history"><MaterialIcons name="history" size={20} color={C.accentText} /><Text style={s.link}>History</Text></Pressable>
     <View style={s.taskList}>{todayTasks.length ? displayedTodayTasks.map((task, index) => <SwipeTaskRow key={task.id} task={task} today={today} position={index} taskCount={displayedTodayTasks.length} dragging={draggingTaskId === task.id} dragTranslateY={dragTranslateY} onRowLayout={(event) => rowHeightsRef.current.set(task.id, event.nativeEvent.layout.height)} onDragStart={() => beginTaskDrag(task.id)} onDragMove={(dy, moveY) => moveTaskDrag(task.id, dy, moveY)} onDragEnd={() => finishTaskDrag(task.id)} onDragCancel={() => cancelTaskDrag(task.id)} onMoveEarlier={index > 0 ? () => moveTaskByOne(task, -1) : undefined} onMoveLater={index < displayedTodayTasks.length - 1 ? () => moveTaskByOne(task, 1) : undefined} onEdit={() => onEditTask(task)} onToggle={() => onToggleTask(task)} onToggleStep={(stepId) => onToggleTaskStep(task.id, stepId)} onPostpone={() => onPostponeTask(task)} />) : <Empty title="A clear day" body="Add one small goal when you’re ready." />}</View>
     {!!tomorrowTasks.length && <View style={s.tomorrowBox}><Text style={s.tomorrowTitle} accessibilityRole="header">Waiting for tomorrow</Text>{tomorrowTasks.map((task) => <View style={s.tomorrowRow} key={`tomorrow-${task.id}`}><View style={[s.stressDot, { backgroundColor: taskColor(task.offsetCount, C) }]} importantForAccessibility="no" /><Pressable style={s.tomorrowEdit} onPress={() => onEditTask(task)} accessibilityRole="button" accessibilityLabel={`Edit ${task.title}, ${task.offsetCount > 0 ? taskMoveCountLabel(task) : `${taskRecurrenceName(task.recurrence)}, starts tomorrow`}`}><Text style={s.tomorrowText}>{task.title}</Text>{task.offsetCount > 0 ? <Text style={s.movedText}>{taskMoveCountLabel(task)}</Text> : <Text style={s.dailyBadge}>{taskRecurrenceName(task.recurrence)} · starts tomorrow</Text>}</Pressable>{task.offsetCount > 0 && <Pressable style={s.restoreButton} onPress={() => onRestoreTask(task)} accessibilityRole="button" accessibilityLabel={`Bring ${task.title} back to today`}><Text style={s.restoreText}>↶ Today</Text></Pressable>}</View>)}</View>}
     {!!scheduledAhead.length && <View style={[s.tomorrowBox, s.scheduledAheadBox]}><Text style={s.tomorrowTitle} accessibilityRole="header">Scheduled ahead</Text>{scheduledAhead.map((task) => <Pressable style={s.scheduledTaskRow} key={`scheduled-${task.id}`} onPress={() => onEditTask(task)} accessibilityRole="button" accessibilityLabel={`Edit ${task.title}, scheduled ${taskDate.format(localDateFromKey(task.scheduledFor))}`}><View style={s.scheduledDate}><Text style={s.scheduledDateText}>{taskDate.format(localDateFromKey(task.scheduledFor))}</Text></View><View style={s.flex}><Text style={s.scheduledTaskText}>{task.title}</Text><Text style={s.scheduledTaskMeta}>{taskRecurrenceName(task.recurrence)}</Text></View><Text style={s.scheduledChevron} allowFontScaling={false}>›</Text></Pressable>)}</View>}
@@ -2680,6 +2799,13 @@ function SettingsModal({ visible, enabled, themeMode, healthEnabled, cycleTracki
 }
 
 type UpdateSettingsModalProps = {
+  otaCandidate: OtaCandidate | null;
+  otaStatus: string | null;
+  otaBusy: boolean;
+  otaReady: boolean;
+  onFindOta: () => void;
+  onInstallOta: () => void;
+  onRestartOta: () => void;
   visible: boolean;
   enabled: boolean;
   busy: boolean;
@@ -2693,7 +2819,7 @@ type UpdateSettingsModalProps = {
   onOpenRelease: (release: LatestRelease) => void;
 };
 
-function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onCheckNow, onCheckInBrowser, onOpenRelease }: UpdateSettingsModalProps) {
+function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRelease, error, onClose, onEnabledChange, onCheckNow, onCheckInBrowser, onOpenRelease, otaCandidate, otaStatus, otaBusy, otaReady, onFindOta, onInstallOta, onRestartOta }: UpdateSettingsModalProps) {
   const { C, s } = useAppTheme();
   const updateAvailable = !!latestRelease && isReleaseNewer(latestRelease.version, APP_VERSION);
   const status = error
@@ -2706,6 +2832,13 @@ function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRele
           : 'Automatic checks are off.');
   return <Sheet visible={visible} onClose={onClose} eyebrow={`Installed version ${APP_VERSION}`} title="App updates">
     <View style={s.privacySummary}><Text style={s.cardTitle}>Your content is never part of an update check</Text><Text style={s.small}>Thoughts, goals, appointments, health entries, identifiers, and usage data stay on this phone.</Text></View>
+    <Field heading>Install in the app</Field>
+    <Text style={s.policyText}>With your permission, check gathermind.control.dk for a signed update. Downloads come from GitHub and its release-asset CDN. Install downloads, verifies and restarts this app when it is safe; if you leave this screen, the update applies next time the app starts. Native changes still need an APK from the browser. Nothing downloads automatically.</Text>
+    {otaStatus && <Text style={[s.policyText, s.spacedText]} accessibilityLiveRegion="polite">{otaStatus}</Text>}
+    {otaBusy && <ActivityIndicator color={C.accentText} accessibilityLabel="Working on the update" />}
+    {!otaReady && <Primary label="Find updates" onPress={onFindOta} disabled={otaBusy} />}
+    {otaCandidate && !otaReady && <Primary label={`Install version ${otaCandidate.version}`} onPress={onInstallOta} disabled={otaBusy} />}
+    {otaReady && <Primary label="Restart with update" onPress={onRestartOta} disabled={otaBusy} />}
     <Field heading>Automatic checks</Field>
     <View style={s.securitySetting}><View style={s.flex}><Text style={s.cardTitle}>Check GitHub for new releases</Text><Text style={s.small}>When enabled, Gather Mind asks GitHub for the latest public release at most once every 24 hours when you open or return to the app. It does not run a background service.</Text></View><Switch style={s.switchControl} value={enabled} onValueChange={onEnabledChange} disabled={busy} trackColor={{ false: C.line, true: C.sage }} thumbColor={enabled ? C.accentSolid : C.white} accessibilityLabel="Automatically check GitHub for Gather Mind updates" /></View>
     <Text style={s.policyText}>Android grants apps general Internet access when they are installed; it does not show a runtime permission prompt or provide a per-app permission switch for it. This Gather Mind setting is the control over whether the app itself uses that access for update checks.</Text>
@@ -2721,16 +2854,18 @@ function UpdateSettingsModal({ visible, enabled, busy, lastCheckedAt, latestRele
 
 function PrivacyModal({ visible, onClose, onDeleteAll }: { visible: boolean; onClose: () => void; onDeleteAll: () => void }) {
   const { s } = useAppTheme();
-  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 7 September 2026" title="Privacy, data & support">
+  return <Sheet visible={visible} onClose={onClose} eyebrow="Effective 18 September 2026" title="Privacy, data & support">
     <View style={s.privacySummary}><Text style={s.cardTitle}>Your data stays encrypted on your device</Text><Text style={s.small}>Gather Mind {APP_VERSION} does not collect, transmit, sell, or share your thoughts, goals, appointments, optional health entries, or usage data.</Text></View>
     <Field heading>What the app stores</Field>
     <Text style={s.policyText}>The content you enter is stored in an encrypted database in the app’s private local storage. This includes optional mood, sleep-quality, and period start/end entries when their features are enabled. The random database key is kept in the phone’s secure key store. The Android home-screen widget receives a bounded summary encrypted separately with Android Keystore; it never receives health entries. Its default count-and-time mode excludes titles; showing titles requires your explicit choice because home-screen content is visible without Gather Mind’s app lock. Appointment reminders and the optional generic daily goal count are scheduled by your phone’s operating system. No account, advertising, analytics, cloud sync, or backend service is used.</Text>
     <Field heading>Permissions</Field>
     <Text style={s.policyText}>Notification access is used only for appointment reminders and the optional quiet daily goal status you choose. Exact-alarm access helps Android deliver the selected local times accurately; timing can be less exact without it. If you turn on Lock Gather Mind, the biometric prompt is used only to unlock the app locally. Health tracking requires no Android health permission or sensor permission and never uses the network. You can deny notifications and leave every optional feature off.</Text>
     <Field heading>Optional update checks</Field>
-    <Text style={s.policyText}>The Android app includes general Internet access solely so it can offer the automatic release check in Settings. Android grants this at installation without a runtime prompt. Automatic checks are off by default. If enabled, Gather Mind contacts only GitHub’s public release API over HTTPS, at most once every 24 hours when the app opens or returns to the foreground. It sends no app content, health data, usage history, account identifier, or device identifier. GitHub still receives ordinary connection information such as your IP address and request metadata. Gather Mind’s developer does not receive update-check data. The manual option opens GitHub in your browser instead, without a request from Gather Mind.</Text>
+    <Text style={s.policyText}>Android Internet access is used only for optional release checks and approved update downloads. Android grants this at installation without a runtime prompt. Automatic checks are off by default. If enabled, Gather Mind contacts only GitHub’s public release API over HTTPS, at most once every 24 hours when the app opens or returns to the foreground. It sends no app content, health data, usage history, account identifier, or device identifier. GitHub receives ordinary connection information such as your IP address. The browser option opens GitHub without a request from Gather Mind. In-app installation has a separate approval described below.</Text>
+    <Field heading>In-app installation</Field>
+    <Text style={s.policyText}>Find updates separately asks permission to contact gathermind.control.dk via Cloudflare for a signed manifest. Install downloads code and assets from github.com and release-assets.githubusercontent.com. These services and the update server receive ordinary connection metadata, including IP addresses, but no personal content, installation identifier, error text, or usage history. The manifest service has no access log; operational error logs and infrastructure logs may contain connection metadata. No code is downloaded automatically. Compatible downloads are verified before use; browser fallback remains available without enabling in-app requests.</Text>
     <Field heading>Retention and deletion</Field>
-    <Text style={s.policyText}>Data remains until you delete individual items, clear health history from Health, use the control below, clear the app’s storage, or uninstall the app. Turning Health off hides the tab; turning cycle tracking off hides period history and Today cycle estimates. Neither erases encrypted history. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
+    <Text style={s.policyText}>Data remains until you delete individual items, clear health history from Health, use the control below, clear the app’s storage, or uninstall the app. Saved goal-history days remain unchanged when you edit or remove a goal; Delete all local data also erases these records. Turning Health off hides the tab; turning cycle tracking off hides period history and Today cycle estimates. Neither erases encrypted history. Delete all also removes the encrypted widget summary and cancels Gather Mind’s scheduled reminders. Android cloud backup is disabled for this app.</Text>
     <Field heading>Support</Field>
     <Text style={s.policyText}>For a reminder problem, check Android notifications, Special app access → Alarms & reminders, Focus, Do Not Disturb, and battery settings. Open and save the appointment again after changing permissions.</Text>
     <Pressable style={[s.secondary, s.wideSecondary, s.spacedButton]} onPress={() => void Linking.openURL('https://github.com/fezdk/gather_mind/issues')} accessibilityRole="link"><Text style={s.secondaryText}>Open GitHub support</Text></Pressable>
@@ -2898,6 +3033,7 @@ function NavButton({ label, symbol, icon, active, onPress }: { label: string; sy
 }
 
 function makeStyles(C: ThemeColors) { return StyleSheet.create({
+  historyLink: { minHeight: 48, alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   app: { flex: 1, backgroundColor: C.paper }, loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: C.paper }, loadingText: { color: C.muted }, flex: { flex: 1 },
   locked: { flex: 1, backgroundColor: C.paper, paddingHorizontal: 24 }, lockBrand: { height: 62, flexDirection: 'row', alignItems: 'center', gap: 10 }, lockContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 70 }, lockSymbol: { width: 58, height: 58, borderRadius: 29, backgroundColor: C.sagePale, color: C.accentText, fontSize: 22, lineHeight: 58, fontWeight: '900', textAlign: 'center', overflow: 'hidden' }, lockTitle: { color: C.ink, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 27, lineHeight: 34, fontWeight: '600', textAlign: 'center', marginTop: 20 }, lockCopy: { maxWidth: 340, color: C.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 10 }, unlockButton: { minWidth: 220, minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentSolid, marginTop: 24, paddingHorizontal: 22 }, lockHint: { maxWidth: 330, color: C.muted, fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 16 },
   topbar: { height: 62, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }, brand: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 8 }, brandText: { color: C.ink, fontWeight: '700', fontSize: 16 },

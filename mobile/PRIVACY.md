@@ -1,6 +1,6 @@
 # Gather Mind privacy policy
 
-Effective: 7 September 2026
+Effective: 18 September 2026
 
 Applies to: Gather Mind 0.5.0 and later until this policy is updated
 
@@ -8,7 +8,7 @@ Gather Mind is a local-first organisational app maintained by Nezar. It is desig
 
 ## Data collection and sharing
 
-Gather Mind's developer does not collect, receive, sell, or share the content or usage data described below. The app contains no advertising, third-party analytics, tracking SDK, cloud sync, or account system. It includes Android Internet access only for the optional release check described below.
+Gather Mind's developer does not collect, receive, sell, or share the content or usage data described below. The app contains no advertising, third-party analytics, tracking SDK, cloud sync, or account system. Android Internet access is used only for the optional release check and explicitly approved signed update downloads described below.
 
 Thoughts, tags, goals, appointments, locations, appointment-plan items, and optional mood, sleep-quality, and period start/end entries are stored only in an encrypted database in the app's private storage on the user's device. Health tracking is off by default, and cycle tracking has a separate opt-in inside it. Turning either on does not transmit data or request access to another health service.
 
@@ -19,7 +19,7 @@ Reminder details and an optional generic count of unfinished goals are given to 
 - Notification permission is used only to show locally scheduled appointment reminders and the optional quiet daily goal status.
 - Exact-alarm access is used on Android only to deliver those chosen local times accurately.
 - Biometric authentication is used only on the device when the user enables **Lock Gather Mind**. The app does not receive or store fingerprint or face data.
-- Android Internet access is available solely for the optional automatic GitHub release check. Android treats this as an install-time normal permission, so it does not show a runtime permission prompt or per-app permission switch.
+- Android Internet access is available solely for optional update checks and signed code/asset downloads. Android treats this as an install-time normal permission, so it does not show a runtime permission prompt or per-app permission switch.
 
 The rest of the app remains usable if notification permission is denied. Health tracking requires no Android health permission or sensor permission and never uses the network.
 
@@ -30,6 +30,12 @@ Automatic update checks are off by default. If the user enables them in **Settin
 The request contains no thoughts, tags, goals, appointments, locations, plan items, health entries, usage history, account identifier, or Gather Mind device identifier. Like any HTTPS request, it exposes ordinary connection information such as the user's IP address and request metadata to GitHub, which processes that information under its own terms. Gather Mind's developer does not receive update-check data.
 
 The manual update option works without enabling automatic checks. It opens the public GitHub releases page in the user's browser, so the browser—not Gather Mind—makes that connection.
+
+## Explicitly requested in-app installation
+
+**Find updates** separately asks permission to contact `gathermind.control.dk` via Cloudflare for a signed manifest. **Install** downloads app code/assets from `github.com` and `release-assets.githubusercontent.com`. No code downloads automatically; the app pins the public signing certificate and verifies the manifest signature and downloaded file hashes. The private signing key is never on the web server or in the app.
+
+The update server and those infrastructure providers see ordinary connection metadata, including IP addresses and requested public runtime versions. No user content, installation identifier, crash text, or usage history is sent. The manifest vhost has no per-request access log, although operational error logs and infrastructure logs can contain connection metadata. Browser-only checking stays available without consenting to in-app requests. Declining or losing the connection does not stop the organisational features from working offline.
 
 ## Retention and deletion
 

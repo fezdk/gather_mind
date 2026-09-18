@@ -59,7 +59,8 @@ const baseTask = {
 
 test('new installations start with no demo or personal data', () => {
   assert.deepEqual(createEmptyState(), {
-    version: 7,
+    version: 8,
+    goalHistory: [],
     thoughts: [],
     appointments: [],
     tasks: [],
@@ -74,7 +75,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const legacy = { version: 1, thoughts: [{ id: 'legacy' }], appointments: [] };
   assert.deepEqual(parseStoredState(JSON.stringify(legacy), 'test storage'), {
-    version: 7,
+    version: 8,
+    goalHistory: [],
     thoughts: [{ id: 'legacy' }],
     appointments: [],
     tasks: [],
@@ -93,7 +95,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
   };
   assert.deepEqual(parseStoredState(JSON.stringify(versionSix), 'test storage'), {
     ...versionSix,
-    version: 7,
+    version: 8,
+    goalHistory: [],
     tasks: [baseTask, { ...baseTask, id: 'second', sortOrder: 1024 }],
   });
 
@@ -105,7 +108,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
     health: { enabled: true, checkIns: [{ date: today, mood: 3, sleep: null }], cycleStarts: ['2026-08-18', '2026-07-20'] },
   };
   assert.deepEqual(parseStoredState(JSON.stringify(versionFive), 'test storage'), {
-    version: 7,
+    version: 8,
+    goalHistory: [],
     thoughts: [],
     appointments: [],
     tasks: [],
@@ -120,7 +124,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
 
   const versionFour = { version: 4, thoughts: [], appointments: [], tasks: [baseTask] };
   assert.deepEqual(parseStoredState(JSON.stringify(versionFour), 'test storage'), {
-    version: 7,
+    version: 8,
+    goalHistory: [],
     thoughts: [],
     appointments: [],
     tasks: [baseTask],
@@ -135,7 +140,8 @@ test('encrypted storage keeps current state and migrates the previous state shap
   };
   delete versionThree.tasks[0].steps;
   assert.deepEqual(parseStoredState(JSON.stringify(versionThree), 'test storage'), {
-    version: 7,
+    version: 8,
+    goalHistory: [],
     thoughts: [],
     appointments: [],
     tasks: [baseTask],
